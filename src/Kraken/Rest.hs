@@ -1,7 +1,6 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE TypeOperators              #-}
-{-# LANGUAGE DataKinds                  #-}
 
 module Kraken.Rest where
 
@@ -10,7 +9,6 @@ import           Data.Aeson.Types
 import           Data.Proxy
 import           Servant.API
 import           Servant.Client
-import           Data.Text
 
 import           Kraken.Types
 
@@ -36,9 +34,19 @@ runKraken = runEitherT
 type KrakenAPI  = APIVersion :> Services
 type APIVersion = "0"
 type Public     = "public"
-type Services   = Time :<|> Assets
-type Time       = Public :> "Time" :> Get '[JSON] Value
-type Assets     = Public :> "Assets" :> ReqBody '[FormUrlEncoded] [(Text,Text)] :> Post '[JSON] Value
+type Services   = Time
+                  :<|> Assets
+type Time       = Public
+                  :> "Time"
+                  :> Get '[JSON] Value
+type Assets     = Public
+                  :> "Assets"
+                  :> ReqBody '[FormUrlEncoded] AssetsOptions
+                  :> Post '[JSON] Value
+
+-----------------------------------------------------------------------------
+
+
 
 -----------------------------------------------------------------------------
 
@@ -48,6 +56,6 @@ api = Proxy
 -----------------------------------------------------------------------------
 
 time       :: KrakenT Value
-assets     :: [(Text,Text)] -> KrakenT Value
+assets     :: AssetsOptions -> KrakenT Value
 
 time :<|> assets = client api (BaseUrl Https restHost restPort)
