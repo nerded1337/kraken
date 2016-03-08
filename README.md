@@ -1,5 +1,5 @@
 # kraken
 
-Haskell bindings to the [kraken](https://www.kraken.com/en-us/help/api) API. 
+Haskell bindings to the [Kraken](https://www.kraken.com/en-us/help/api) API. 
 
 Early stage work in progress.
