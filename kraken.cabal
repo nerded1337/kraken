@@ -15,23 +15,30 @@ cabal-version:       >=1.10
 
 library
   default-language:    Haskell2010
-  ghc-options:         -Wall
+  ghc-options:         -Wall -fno-warn-orphans
   hs-source-dirs:      src
   exposed-modules:     Kraken.API
                      , Kraken.Rest
                      , Kraken.Types
   build-depends:       aeson
                      , base >= 4.7 && < 5
+                     , base64-bytestring
+                     , byteable
+                     , bytestring
+                     , cryptohash
+                     , data-default
                      , either
                      , hashable
                      , servant
                      , servant-client
                      , text
                      , time
+                     , transformers
                      , unordered-containers
   default-extensions:  DataKinds
                        DeriveGeneric
                        DeriveAnyClass
+                       FlexibleInstances
                        LambdaCase
                        OverloadedStrings
                        RecordWildCards
@@ -44,6 +51,8 @@ executable kraken
   hs-source-dirs:      app
   main-is:             Main.hs
   build-depends:       base
+                     , bytestring
+                     , data-default
                      , kraken
                      , text
                      , transformers
