@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 module Main where
 
 import Control.Monad
@@ -13,8 +11,11 @@ import Kraken.Rest
 
 main :: IO ()
 main = void $ runKraken $ do
-  io =<< time
-  io =<< assets (AssetsOptions Currency [XXBT,XETH])
+  t <- time
+  io t
+  a <- assets (AssetsOptions Currency [XXBT,XETH])
+  io a
  where
+  io :: Show a => a -> KrakenT ()
   io = liftIO . print
 

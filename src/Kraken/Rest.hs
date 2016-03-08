@@ -1,11 +1,6 @@
-{-# LANGUAGE DataKinds                  #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE TypeOperators              #-}
-
 module Kraken.Rest where
 
 import           Control.Monad.Trans.Either
-import           Data.Aeson.Types
 import           Data.Proxy
 import           Servant.API
 import           Servant.Client
@@ -31,22 +26,19 @@ runKraken = runEitherT
 
 -----------------------------------------------------------------------------
 
-type KrakenAPI  = APIVersion :> Services
-type APIVersion = "0"
-type Public     = "public"
-type Services   = Time
-                  :<|> Assets
-type Time       = Public
-                  :> "Time"
-                  :> Get '[JSON] Value
-type Assets     = Public
-                  :> "Assets"
-                  :> ReqBody '[FormUrlEncoded] AssetsOptions
-                  :> Post '[JSON] Value
-
------------------------------------------------------------------------------
-
-
+type KrakenAPI     = APIVersion :> Services
+type APIVersion    = "0"
+type Public        = "public"
+type Services      = TimeService
+                     :<|>
+                     AssetsService
+type TimeService   = Public
+                     :> "Time"
+                     :> Get '[JSON] Time
+type AssetsService = Public
+                     :> "Assets"
+                     :> ReqBody '[FormUrlEncoded] AssetsOptions
+                     :> Post '[JSON] Assets
 
 -----------------------------------------------------------------------------
 
@@ -55,7 +47,7 @@ api = Proxy
 
 -----------------------------------------------------------------------------
 
-time       :: KrakenT Value
-assets     :: AssetsOptions -> KrakenT Value
+time       :: KrakenT Time
+assets     :: AssetsOptions -> KrakenT Assets
 
 time :<|> assets = client api (BaseUrl Https restHost restPort)

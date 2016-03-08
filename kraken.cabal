@@ -23,9 +23,20 @@ library
   build-depends:       aeson
                      , base >= 4.7 && < 5
                      , either
+                     , hashable
                      , servant
                      , servant-client
                      , text
+                     , time
+                     , unordered-containers
+  default-extensions:  DataKinds
+                       DeriveGeneric
+                       DeriveAnyClass
+                       LambdaCase
+                       OverloadedStrings
+                       RecordWildCards
+                       ScopedTypeVariables
+                       TypeOperators
 
 executable kraken
   default-language:    Haskell2010
@@ -36,6 +47,7 @@ executable kraken
                      , kraken
                      , text
                      , transformers
+  default-extensions:  OverloadedStrings
 
 test-suite spec
   default-language:    Haskell2010
