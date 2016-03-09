@@ -7,15 +7,12 @@ import           Control.Monad.Trans.Reader
 import           Crypto.Hash
 import           Data.Aeson.Types
 import           Data.Byteable
-import           Data.ByteString
 import qualified Data.ByteString.Base64 as B64
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy as BL
-import           Data.Default
 import           Data.Monoid
 import           Data.Proxy
 import           Data.Text (Text)
-import qualified Data.Text as T (pack)
 import           Data.Text.Encoding (decodeUtf8)
 import           Data.Time
 import           Data.Time.Clock.POSIX
@@ -34,26 +31,6 @@ restPort = 443
 
 -----------------------------------------------------------------------------
 
-data Config = Config
-  { configAPIKey     :: ByteString
-  , configPrivateKey :: ByteString
-  , configPassword   :: Maybe ByteString
-  }
-
-instance Default Config where
-  def = Config
-    { configAPIKey     = ""
-    , configPrivateKey = ""
-    , configPassword   = Nothing
-    }
-
-mkConfig :: ByteString -> ByteString -> Maybe ByteString -> Either String Config
-mkConfig ak pk pw = case B64.decode pk of
-  Right pkd -> Right $ Config ak pkd pw
-  Left  e   -> Left e
-
------------------------------------------------------------------------------
-
 type ServantT = EitherT ServantError IO
 type KrakenT  = ReaderT Config ServantT
 
@@ -62,58 +39,146 @@ runKraken cfg = runEitherT . flip runReaderT cfg
 
 -----------------------------------------------------------------------------
 
-type KrakenAPI          = TimeService
-                          :<|>
-                          AssetsService
-                          :<|>
-                          AccBalService
-type TimeService        = APIVersion
-                          :> Public
-                          :> "Time"
-                          :> Get '[JSON] Time
-type AssetsService      = APIVersion
-                          :> Public
-                          :> "Assets"
-                          :> ReqBody '[FormUrlEncoded] AssetsOptions
-                          :> Post '[JSON] Assets
-type AccBalService      = APIVersion
-                          :> Private
-                          :> "Balance"
-                          :> Header "API-Key" Text
-                          :> Header "API-Sign" Text
-                          :> ReqBody '[FormUrlEncoded] (PrivReq ())
-                          :> Post '[JSON] Value
-type APIVersion         = "0"
-type Public             = "public"
-type Private            = "private"
+type KrakenAPI             = TimeService
+                             :<|> AssetService
+                             :<|> AssetPairService
+                             :<|> TickerService
+                             :<|> OHLCService
+                             :<|> OrderBookService
+                             :<|> TradeService
+                             :<|> SpreadService
+                             :<|> AccountBalanceService
+                             :<|> TradeBalanceService
+                             :<|> OpenOrdersService
+                             :<|> ClosedOrdersService
+                             :<|> QueryOrdersService
+                             :<|> TradeHistoryService
+                             :<|> QueryTradesService
+                             :<|> OpenPositionsService
+                             :<|> LedgersService
+                             :<|> QueryLedgersService
+                             :<|> TradeVolumeService
 
-{-
-type KrakenAPI          = APIVersion :> Services
-type PrivateRequest a b = Header "API-Key" Text
-                          :> Header "API-Sign" Text
-                          :> PublicRequest a b
-type PublicRequest a b  = ReqBody '[FormUrlEncoded] a
-                          :> Post '[JSON] b
--}
-
------------------------------------------------------------------------------
-
-instance ToFormUrlEncoded () where
-  toFormUrlEncoded () = []
-
-data PrivReq a = PrivReq
-  { privreqNonce :: Int
-  , privreqOTP   :: Maybe ByteString
-  , privreqData  :: a
-  }
-
-instance (ToFormUrlEncoded a) => ToFormUrlEncoded (PrivReq a) where
-  toFormUrlEncoded PrivReq{..} = 
-    [ ("nonce",T.pack . show $ privreqNonce) ]
-    ++
-    [ ("otp"  ,decodeUtf8 otp) | Just otp <- [privreqOTP] ]
-    ++
-    toFormUrlEncoded privreqData
+type TimeService           = APIVersion
+                             :> Public
+                             :> "Time"
+                             :> Get '[JSON] Time
+type AssetService          = APIVersion
+                             :> Public
+                             :> "Assets"
+                             :> ReqBody '[FormUrlEncoded] AssetOptions
+                             :> Post '[JSON] Assets
+type AssetPairService      = APIVersion
+                             :> Public
+                             :> "AssetPairs"
+                             :> ReqBody '[FormUrlEncoded] AssetPairOptions
+                             :> Post '[JSON] AssetPairs
+type TickerService         = APIVersion
+                             :> Public
+                             :> "Ticker"
+                             :> ReqBody '[FormUrlEncoded] TickerOptions
+                             :> Post '[JSON] Tickers
+type OHLCService           = APIVersion
+                             :> Public
+                             :> "OHLC"
+                             :> ReqBody '[FormUrlEncoded] OHLCOptions
+                             :> Post '[JSON] OHLCs
+type OrderBookService      = APIVersion
+                             :> Public
+                             :> "Depth"
+                             :> ReqBody '[FormUrlEncoded] OrderBookOptions
+                             :> Post '[JSON] OrderBook
+type TradeService          = APIVersion
+                             :> Public
+                             :> "Trades"
+                             :> ReqBody '[FormUrlEncoded] TradeOptions
+                             :> Post '[JSON] Trades
+type SpreadService         = APIVersion
+                             :> Public
+                             :> "Spread"
+                             :> ReqBody '[FormUrlEncoded] SpreadOptions
+                             :> Post '[JSON] Spreads
+type AccountBalanceService = APIVersion
+                             :> Private
+                             :> "Balance"
+                             :> Header "API-Key" Text
+                             :> Header "API-Sign" Text
+                             :> ReqBody '[FormUrlEncoded] (PrivReq ())
+                             :> Post '[JSON] Value
+type TradeBalanceService   = APIVersion
+                             :> Private
+                             :> "TradeBalance"
+                             :> Header "API-Key" Text
+                             :> Header "API-Sign" Text
+                             :> ReqBody '[FormUrlEncoded] (PrivReq ())
+                             :> Post '[JSON] Value
+type OpenOrdersService     = APIVersion
+                             :> Private
+                             :> "OpenOrders"
+                             :> Header "API-Key" Text
+                             :> Header "API-Sign" Text
+                             :> ReqBody '[FormUrlEncoded] (PrivReq ())
+                             :> Post '[JSON] Value
+type ClosedOrdersService   = APIVersion
+                             :> Private
+                             :> "ClosedOrders"
+                             :> Header "API-Key" Text
+                             :> Header "API-Sign" Text
+                             :> ReqBody '[FormUrlEncoded] (PrivReq ())
+                             :> Post '[JSON] Value
+type QueryOrdersService    = APIVersion
+                             :> Private
+                             :> "QueryOrders"
+                             :> Header "API-Key" Text
+                             :> Header "API-Sign" Text
+                             :> ReqBody '[FormUrlEncoded] (PrivReq ())
+                             :> Post '[JSON] Value
+type TradeHistoryService   = APIVersion
+                             :> Private
+                             :> "TradeHistory"
+                             :> Header "API-Key" Text
+                             :> Header "API-Sign" Text
+                             :> ReqBody '[FormUrlEncoded] (PrivReq ())
+                             :> Post '[JSON] Value
+type QueryTradesService    = APIVersion
+                             :> Private
+                             :> "QueryTrades"
+                             :> Header "API-Key" Text
+                             :> Header "API-Sign" Text
+                             :> ReqBody '[FormUrlEncoded] (PrivReq ())
+                             :> Post '[JSON] Value
+type OpenPositionsService  = APIVersion
+                             :> Private
+                             :> "OpenPositions"
+                             :> Header "API-Key" Text
+                             :> Header "API-Sign" Text
+                             :> ReqBody '[FormUrlEncoded] (PrivReq ())
+                             :> Post '[JSON] Value
+type LedgersService        = APIVersion
+                             :> Private
+                             :> "Ledgers"
+                             :> Header "API-Key" Text
+                             :> Header "API-Sign" Text
+                             :> ReqBody '[FormUrlEncoded] (PrivReq ())
+                             :> Post '[JSON] Value
+type QueryLedgersService   = APIVersion
+                             :> Private
+                             :> "QueryLedgers"
+                             :> Header "API-Key" Text
+                             :> Header "API-Sign" Text
+                             :> ReqBody '[FormUrlEncoded] (PrivReq ())
+                             :> Post '[JSON] Value
+type TradeVolumeService    = APIVersion
+                             :> Private
+                             :> "TradeVolume"
+                             :> Header "API-Key" Text
+                             :> Header "API-Sign" Text
+                             :> ReqBody '[FormUrlEncoded] (PrivReq ())
+                             :> Post '[JSON] Value
+  
+type APIVersion            = "0"
+type Public                = "public"
+type Private               = "private"
 
 -----------------------------------------------------------------------------
 
@@ -122,37 +187,107 @@ api = Proxy
 
 -----------------------------------------------------------------------------
 
-time_      :: ServantT Time
-assets_    :: AssetsOptions -> ServantT Assets
-balance_   :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
+time_           :: ServantT Time
+assets_         :: AssetOptions -> ServantT Assets
+assetPairs_     :: AssetPairOptions -> ServantT AssetPairs
+tickers_        :: TickerOptions -> ServantT Tickers
+ohlcs_          :: OHLCOptions -> ServantT OHLCs
+orderBook_      :: OrderBookOptions -> ServantT OrderBook
+trades_         :: TradeOptions -> ServantT Trades
+spreads_        :: SpreadOptions -> ServantT Spreads
+accountBalance_ :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
+tradeBalance_   :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
+openOrders_     :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
+closedOrders_   :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
+queryOrders_    :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
+tradeHistory_   :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
+queryTrades_    :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
+openPositions_  :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
+ledgers_        :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
+queryLedgers_   :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
+tradeVolume_    :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
 
 time_
   :<|> assets_
-  :<|> balance_ = client api (BaseUrl Https restHost restPort)
+  :<|> assetPairs_
+  :<|> tickers_
+  :<|> ohlcs_
+  :<|> orderBook_
+  :<|> trades_
+  :<|> spreads_
+  :<|> accountBalance_ 
+  :<|> tradeBalance_
+  :<|> openOrders_
+  :<|> closedOrders_
+  :<|> queryOrders_
+  :<|> tradeHistory_
+  :<|> queryTrades_
+  :<|> openPositions_
+  :<|> ledgers_
+  :<|> queryLedgers_
+  :<|> tradeVolume_  = client api (BaseUrl Https restHost restPort)
 
 -----------------------------------------------------------------------------
 
 time :: KrakenT Time
 time = lift time_
 
-assets :: AssetsOptions -> KrakenT Assets
+assets :: AssetOptions -> KrakenT Assets
 assets = lift . assets_
 
-balance :: KrakenT Value
-balance = do
+assetPairs :: AssetPairOptions -> KrakenT AssetPairs
+assetPairs = lift . assetPairs_
+
+tickers :: TickerOptions -> KrakenT Tickers
+tickers = lift . tickers_
+
+ohlcs :: OHLCOptions -> KrakenT OHLCs
+ohlcs = lift . ohlcs_
+
+orderBook :: OrderBookOptions -> KrakenT OrderBook
+orderBook = lift . orderBook_
+
+trades :: TradeOptions -> KrakenT Trades
+trades = lift . trades_
+
+spreads :: SpreadOptions -> KrakenT Spreads
+spreads = lift . spreads_
+
+-----------------------------------------------------------------------------
+
+privateRequest :: ToFormUrlEncoded a =>
+                  String ->
+                  a ->
+                  (Maybe Text -> Maybe Text -> PrivReq a -> ServantT b) ->
+                  KrakenT b
+privateRequest url d f = do
   Config{..} <- ask
   utcTime <- liftIO getCurrentTime
   let apiKey       = decodeUtf8 configAPIKey
-      apiSign      = decodeUtf8 . B64.encode . toBytes $ hmacMsg
-      msg          = uri <> hashPostData
-      hmacMsg      = hmac configPrivateKey msg :: HMAC SHA512
-      privReq      = PrivReq nonce configPassword ()
+      uri          = BC.pack $ "/" ++ url
+      nonce        = fromEnum . utcTimeToPOSIXSeconds $ utcTime
+      privReq      = PrivReq nonce configPassword d
       postData     = BL.toStrict $ mimeRender (Proxy :: Proxy FormUrlEncoded)
                                               privReq
-      hashPostData = toBytes (hash (nonceBytes <> postData) :: Digest SHA256)
-      nonce        = fromEnum . utcTimeToPOSIXSeconds $ utcTime
       nonceBytes   = BC.pack . show $ nonce
-      uri          = BC.pack $ "/" ++ (show $ safeLink api
-                                               (Proxy :: Proxy AccBalService))
-  lift $ balance_ (Just apiKey) (Just apiSign) privReq
+      hashPostData = toBytes (hash (nonceBytes <> postData) :: Digest SHA256)
+      
+      msg          = uri <> hashPostData
+      hmacMsg      = hmac configPrivateKey msg :: HMAC SHA512
+      apiSign      = decodeUtf8 . B64.encode . toBytes $ hmacMsg
+  lift $ f (Just apiKey) (Just apiSign) privReq
+
+-----------------------------------------------------------------------------
+
+accountBalance :: KrakenT Value
+accountBalance = privateRequest 
+  (show . safeLink api $ (Proxy :: Proxy AccountBalanceService))
+  ()
+  accountBalance_
+
+tradeVolume :: KrakenT Value
+tradeVolume = privateRequest
+  (show . safeLink api $ (Proxy :: Proxy TradeVolumeService))
+  ()
+  tradeVolume_
 
