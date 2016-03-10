@@ -273,6 +273,20 @@ instance (ToFormUrlEncoded a) => ToFormUrlEncoded (PrivReq a) where
 
 -----------------------------------------------------------------------------
 
+data TradeVolumeOptions = TradeVolumeOptions
+  { tradevolumeFeePairs :: [AssetPair]
+  } deriving Show
+
+instance ToFormUrlEncoded TradeVolumeOptions where
+  toFormUrlEncoded TradeVolumeOptions{..} =
+    case tradevolumeFeePairs of 
+      [] -> []
+      _  -> [ ("pair",(T.intercalate "," . map toText) tradevolumeFeePairs)
+            , ("fee-info","true")
+            ]
+
+-----------------------------------------------------------------------------
+
 parseResult :: FromJSON a => Value -> Parser a
 parseResult = withObject "result" $ \o -> do
   (e :: [String]) <- o .: "error"

@@ -173,7 +173,7 @@ type TradeVolumeService    = APIVersion
                              :> "TradeVolume"
                              :> Header "API-Key" Text
                              :> Header "API-Sign" Text
-                             :> ReqBody '[FormUrlEncoded] (PrivReq ())
+                             :> ReqBody '[FormUrlEncoded] (PrivReq TradeVolumeOptions)
                              :> Post '[JSON] Value
   
 type APIVersion            = "0"
@@ -205,7 +205,7 @@ queryTrades_    :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
 openPositions_  :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
 ledgers_        :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
 queryLedgers_   :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
-tradeVolume_    :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
+tradeVolume_    :: Maybe Text -> Maybe Text -> PrivReq TradeVolumeOptions -> ServantT Value
 
 time_
   :<|> assets_
@@ -285,9 +285,9 @@ accountBalance = privateRequest
   ()
   accountBalance_
 
-tradeVolume :: KrakenT Value
-tradeVolume = privateRequest
+tradeVolume :: TradeVolumeOptions -> KrakenT Value
+tradeVolume opts = privateRequest
   (show . safeLink api $ (Proxy :: Proxy TradeVolumeService))
-  ()
+  opts
   tradeVolume_
 
