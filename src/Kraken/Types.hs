@@ -181,15 +181,34 @@ type OrderBook = Value
 
 -----------------------------------------------------------------------------
 
-type OrderBookOptions = ()
+data OrderBookOptions = OrderBookOptions
+  { orderbookPair :: AssetPair
+  , orderbookCount :: Maybe Int
+  } deriving Show
+
+instance ToFormUrlEncoded OrderBookOptions where
+  toFormUrlEncoded OrderBookOptions{..} = 
+    [ ("pair",toText orderbookPair) ]
+    ++
+    [ ("count",T.pack (show count)) | Just count <- [orderbookCount]]
+
+-----------------------------------------------------------------------------
+
+data SpreadOptions = SpreadOptions
+  { spreadPair :: AssetPair
+  , spreadSince :: Maybe Text
+  } deriving Show
+
+instance ToFormUrlEncoded SpreadOptions where
+  toFormUrlEncoded SpreadOptions{..} =
+    [ ("pair",toText spreadPair)]
+    ++
+    [ ("since",since) | Just since <- [spreadSince] ]
 
 -----------------------------------------------------------------------------
 
 type Spreads = Value
 
------------------------------------------------------------------------------
-
-type SpreadOptions = ()
 
 -----------------------------------------------------------------------------
 
@@ -218,7 +237,16 @@ instance FromJSON Time where
 
 -----------------------------------------------------------------------------
 
-type TradeOptions = ()
+data TradeOptions = TradeOptions
+  { tradePair :: AssetPair
+  , tradeSince :: Maybe Text
+  } deriving Show
+
+instance ToFormUrlEncoded TradeOptions where
+  toFormUrlEncoded TradeOptions{..} =
+    [ ("pair",toText tradePair)]
+    ++
+    [ ("since",since) | Just since <- [tradeSince] ]
 
 -----------------------------------------------------------------------------
 

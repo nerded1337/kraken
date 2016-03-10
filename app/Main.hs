@@ -23,13 +23,16 @@ run cfg = void $ runKraken cfg $ do
   io =<< assetPairs     (AssetPairOptions Info pairs)
   io =<< tickers        (TickerOptions pairs)
   io =<< ohlcs          (OHLCOptions xbtusd 60 Nothing)
+  io =<< orderBook      (OrderBookOptions xbtusd (Just 5))
+  io =<< trades         (TradeOptions xbtusd Nothing)
+  io =<< spreads        (SpreadOptions xbtusd Nothing)
   io =<< accountBalance
   io =<< tradeVolume
 
  where
 
   io :: Show a => a -> KrakenT ()
-  io = liftIO . print
+  io t = liftIO $ print t >> putChar '\n'
 
   pairs  = [xbtusd,xbteur]
   xbtusd = AssetPair XXBT ZUSD

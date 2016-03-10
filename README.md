@@ -11,4 +11,5 @@ Early stage work in progress.
 * Add private trading services
 * Refactor repetition in service types (first attempt failed - type level DSL does not seem to tolerate type synonyms in some contexts)
 * Restrict OHLC bar intervals
+* Handle 'since' / last' - JSON can be number or string
 * Add tests
