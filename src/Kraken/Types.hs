@@ -10,7 +10,8 @@ import           Data.Default
 import           Data.Hashable
 import           Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as H (fromList,toList)
-import qualified Data.Text as T (intercalate,pack,toLower)
+import           Data.Text (Text)
+import qualified Data.Text as T (concat,intercalate,pack,toLower)
 import           Data.Text.Encoding (decodeUtf8)
 import           Data.Time
 import           Data.Time.Clock.POSIX
@@ -27,6 +28,11 @@ type Port = Int
 data Asset = 
     XXBT
   | XETH
+  | ZCAD
+  | ZEUR
+  | ZGBP
+  | ZJPY
+  | ZUSD
     deriving (Eq,FromJSON,Generic,Ord,Read,Show)
 
 instance Hashable Asset
@@ -40,7 +46,7 @@ data AssetInfo = AssetInfo
   { assetinfoDisplayDecimals :: Int
   , assetinfoClass :: Class
   , assetinfoDecimals :: Int
-  , assetinfoAltName :: String
+  , assetinfoAltName :: Text
   } deriving Show
 
 instance FromJSON AssetInfo where
@@ -65,11 +71,44 @@ instance ToFormUrlEncoded AssetOptions where
 
 -----------------------------------------------------------------------------
 
+data AssetPair = AssetPair
+  { assetpairBase  :: Asset
+  , assetpairQuote :: Asset
+  } deriving Show
+
+instance ToText AssetPair where
+  toText AssetPair{..} = T.concat [ toText assetpairBase
+                                  , toText assetpairQuote
+                                  ]
+
+-----------------------------------------------------------------------------
+
+data AssetPairInfo =
+    Info
+  | Leverage
+  | Fees
+  | Margin
+    deriving (Eq,Ord,Read,Show)
+
+instance ToText AssetPairInfo where
+  toText = T.toLower . T.pack . show
+
+-----------------------------------------------------------------------------
+
 type AssetPairs = Value
 
 -----------------------------------------------------------------------------
 
-type AssetPairOptions = ()
+data AssetPairOptions = AssetPairOptions
+  { assetpairInfo  :: AssetPairInfo
+  , assetpairPairs :: [AssetPair]
+  } deriving Show
+
+instance ToFormUrlEncoded AssetPairOptions where
+  toFormUrlEncoded AssetPairOptions{..} =
+    [ ("info",toText assetpairInfo)
+    , ("pair",(T.intercalate "," . map toText) assetpairPairs)
+    ]
 
 -----------------------------------------------------------------------------
 
@@ -102,7 +141,7 @@ data Config = Config
   { configAPIKey     :: ByteString
   , configPrivateKey :: ByteString
   , configPassword   :: Maybe ByteString
-  }
+  } deriving Show
 
 instance Default Config where
   def = Config
@@ -118,11 +157,23 @@ mkConfig ak pk pw = case B64.decode pk of
 
 -----------------------------------------------------------------------------
 
-type OHLCs = Value
+data OHLCOptions = OHLCOptions
+  { ohlcPair :: AssetPair
+  , ohlcIntervalMins :: Int
+  , ohlcSince :: Maybe Text
+  } deriving Show
+
+instance ToFormUrlEncoded OHLCOptions where
+  toFormUrlEncoded OHLCOptions{..} =
+    [ ("pair",toText ohlcPair)
+    , ("interval",T.pack $ show ohlcIntervalMins)
+    ]
+    ++
+    [ ("since",since) | Just since <- [ohlcSince] ]
 
 -----------------------------------------------------------------------------
 
-type OHLCOptions = ()
+type OHLCs = Value
 
 -----------------------------------------------------------------------------
 
@@ -142,19 +193,18 @@ type SpreadOptions = ()
 
 -----------------------------------------------------------------------------
 
+data TickerOptions = TickerOptions
+  { tickerPairs :: [AssetPair]
+  } deriving Show
+
+instance ToFormUrlEncoded TickerOptions where
+  toFormUrlEncoded TickerOptions{..} =
+    [ ("pair",(T.intercalate "," . map toText) tickerPairs)
+    ]
+
+-----------------------------------------------------------------------------
+
 type Tickers = Value
-
------------------------------------------------------------------------------
-
-type TickerOptions = ()
-
------------------------------------------------------------------------------
-
-type Trades = Value
-
------------------------------------------------------------------------------
-
-type TradeOptions = ()
 
 -----------------------------------------------------------------------------
 
@@ -165,6 +215,14 @@ instance FromJSON Time where
     r <- parseResult x
     (t :: Int) <- r .: "unixtime"
     return . Time . posixSecondsToUTCTime . fromIntegral $ t
+
+-----------------------------------------------------------------------------
+
+type TradeOptions = ()
+
+-----------------------------------------------------------------------------
+
+type Trades = Value
 
 -----------------------------------------------------------------------------
 

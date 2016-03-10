@@ -5,31 +5,33 @@ import Control.Monad.IO.Class
 import qualified Data.ByteString.Char8 as BC (pack)
 import Data.Text
 import System.Environment
+import System.Exit
 
-import Kraken.Types
 import Kraken.Rest
+import Kraken.Types
+import Kraken.Util
 
 -----------------------------------------------------------------------------
 
 main :: IO ()
-main = do
+main = getConfig >>= either (const exitFailure) run 
   
-  Just apiKey     <- lookupEnv "KRAKEN_API_KEY"
-  Just apiPrivKey <- lookupEnv "KRAKEN_API_PRIVKEY"
-  apiPass         <- lookupEnv "KRAKEN_API_PASSWORD"
-  
-  let Right cfg = mkConfig (BC.pack apiKey)
-                           (BC.pack apiPrivKey)
-                           (fmap BC.pack apiPass)
-  
-  void $ runKraken cfg $ do
-    io =<< time
-    io =<< assets (AssetOptions Currency [XXBT,XETH])
-    io =<< assetPairs ()
-    io =<< accountBalance
-    io =<< tradeVolume
+run :: Config -> IO ()
+run cfg = void $ runKraken cfg $ do
+  io =<< time
+  io =<< assets         (AssetOptions Currency [XXBT,XETH])
+  io =<< assetPairs     (AssetPairOptions Info pairs)
+  io =<< tickers        (TickerOptions pairs)
+  io =<< ohlcs          (OHLCOptions xbtusd 60 Nothing)
+  io =<< accountBalance
+  io =<< tradeVolume
 
  where
 
   io :: Show a => a -> KrakenT ()
   io = liftIO . print
+
+  pairs  = [xbtusd,xbteur]
+  xbtusd = AssetPair XXBT ZUSD
+  xbteur = AssetPair XXBT ZEUR
+
