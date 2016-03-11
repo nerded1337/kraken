@@ -110,14 +110,14 @@ type TradeBalanceService   = APIVersion
                              :> "TradeBalance"
                              :> Header "API-Key" Text
                              :> Header "API-Sign" Text
-                             :> ReqBody '[FormUrlEncoded] (PrivReq ())
+                             :> ReqBody '[FormUrlEncoded] (PrivReq TradeBalanceOptions)
                              :> Post '[JSON] Value
 type OpenOrdersService     = APIVersion
                              :> Private
                              :> "OpenOrders"
                              :> Header "API-Key" Text
                              :> Header "API-Sign" Text
-                             :> ReqBody '[FormUrlEncoded] (PrivReq ())
+                             :> ReqBody '[FormUrlEncoded] (PrivReq OpenOrdersOptions)
                              :> Post '[JSON] Value
 type ClosedOrdersService   = APIVersion
                              :> Private
@@ -196,8 +196,8 @@ orderBook_      :: OrderBookOptions -> ServantT OrderBook
 trades_         :: TradeOptions -> ServantT Trades
 spreads_        :: SpreadOptions -> ServantT Spreads
 accountBalance_ :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
-tradeBalance_   :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
-openOrders_     :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
+tradeBalance_   :: Maybe Text -> Maybe Text -> PrivReq TradeBalanceOptions -> ServantT Value
+openOrders_     :: Maybe Text -> Maybe Text -> PrivReq OpenOrdersOptions -> ServantT Value
 closedOrders_   :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
 queryOrders_    :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
 tradeHistory_   :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
@@ -284,6 +284,18 @@ accountBalance = privateRequest
   (show . safeLink api $ (Proxy :: Proxy AccountBalanceService))
   ()
   accountBalance_
+
+tradeBalance :: TradeBalanceOptions -> KrakenT Value
+tradeBalance opts = privateRequest
+  (show . safeLink api $ (Proxy :: Proxy TradeBalanceService))
+  opts
+  tradeBalance_
+
+openOrders :: OpenOrdersOptions -> KrakenT Value
+openOrders opts = privateRequest
+  (show . safeLink api $ (Proxy :: Proxy OpenOrdersService))
+  opts
+  openOrders_
 
 tradeVolume :: TradeVolumeOptions -> KrakenT Value
 tradeVolume opts = privateRequest

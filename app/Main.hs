@@ -27,6 +27,8 @@ run cfg = void $ runKraken cfg $ do
   io =<< trades         (TradeOptions xbtusd Nothing)
   io =<< spreads        (SpreadOptions xbtusd Nothing)
   io =<< accountBalance
+  io =<< tradeBalance   (TradeBalanceOptions Nothing Nothing)
+  io =<< openOrders     (OpenOrdersOptions True Nothing)
   io =<< tradeVolume    (TradeVolumeOptions pairs)
 
  where

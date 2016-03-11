@@ -177,6 +177,20 @@ type OHLCs = Value
 
 -----------------------------------------------------------------------------
 
+data OpenOrdersOptions = OpenOrdersOptions
+  { openordersIncludeTrades :: Bool
+  , openordersUserRef :: Maybe Text
+  } deriving Show
+
+instance ToFormUrlEncoded OpenOrdersOptions where
+  toFormUrlEncoded OpenOrdersOptions{..} =
+    [ ("trades",T.toLower . toText . show $ openordersIncludeTrades ) ]
+    ++
+    [ ("userref",toText r) | Just r <- [openordersUserRef] ]
+
+
+-----------------------------------------------------------------------------
+
 type OrderBook = Value
 
 -----------------------------------------------------------------------------
@@ -234,6 +248,19 @@ instance FromJSON Time where
     r <- parseResult x
     (t :: Int) <- r .: "unixtime"
     return . Time . posixSecondsToUTCTime . fromIntegral $ t
+
+-----------------------------------------------------------------------------
+
+data TradeBalanceOptions = TradeBalanceOptions
+  { tradebalanceClass :: Maybe Class
+  , tradebalanceAsset :: Maybe Asset
+  } deriving Show
+
+instance ToFormUrlEncoded TradeBalanceOptions where
+  toFormUrlEncoded TradeBalanceOptions{..} =
+    [ ("aclass",toText c) | Just c <- [tradebalanceClass] ]
+    ++
+    [ ("asset",toText a) | Just a <- [tradebalanceAsset] ]
 
 -----------------------------------------------------------------------------
 
