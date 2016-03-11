@@ -124,14 +124,14 @@ type ClosedOrdersService   = APIVersion
                              :> "ClosedOrders"
                              :> Header "API-Key" Text
                              :> Header "API-Sign" Text
-                             :> ReqBody '[FormUrlEncoded] (PrivReq ())
+                             :> ReqBody '[FormUrlEncoded] (PrivReq ClosedOrdersOptions)
                              :> Post '[JSON] Value
 type QueryOrdersService    = APIVersion
                              :> Private
                              :> "QueryOrders"
                              :> Header "API-Key" Text
                              :> Header "API-Sign" Text
-                             :> ReqBody '[FormUrlEncoded] (PrivReq ())
+                             :> ReqBody '[FormUrlEncoded] (PrivReq QueryOrdersOptions)
                              :> Post '[JSON] Value
 type TradeHistoryService   = APIVersion
                              :> Private
@@ -198,8 +198,8 @@ spreads_        :: SpreadOptions -> ServantT Spreads
 accountBalance_ :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
 tradeBalance_   :: Maybe Text -> Maybe Text -> PrivReq TradeBalanceOptions -> ServantT Value
 openOrders_     :: Maybe Text -> Maybe Text -> PrivReq OpenOrdersOptions -> ServantT Value
-closedOrders_   :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
-queryOrders_    :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
+closedOrders_   :: Maybe Text -> Maybe Text -> PrivReq ClosedOrdersOptions -> ServantT Value
+queryOrders_    :: Maybe Text -> Maybe Text -> PrivReq QueryOrdersOptions -> ServantT Value
 tradeHistory_   :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
 queryTrades_    :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
 openPositions_  :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
@@ -296,6 +296,18 @@ openOrders opts = privateRequest
   (show . safeLink api $ (Proxy :: Proxy OpenOrdersService))
   opts
   openOrders_
+
+closedOrders :: ClosedOrdersOptions -> KrakenT Value
+closedOrders opts = privateRequest
+  (show . safeLink api $ (Proxy :: Proxy ClosedOrdersService))
+  opts
+  closedOrders_
+
+queryOrders :: QueryOrdersOptions -> KrakenT Value
+queryOrders opts = privateRequest
+  (show . safeLink api $ (Proxy :: Proxy QueryOrdersService))
+  opts
+  queryOrders_
 
 tradeVolume :: TradeVolumeOptions -> KrakenT Value
 tradeVolume opts = privateRequest

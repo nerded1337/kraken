@@ -137,6 +137,42 @@ instance ToText Class where
 
 -----------------------------------------------------------------------------
 
+data ClosedOrdersOptions = ClosedOrdersOptions
+  { closedordersIncludeTrades :: Bool
+  , closedordersUserRef :: Maybe Text
+  , closedordersStart :: Maybe TimeBound
+  , closedordersEnd  :: Maybe TimeBound
+  , closedordersOffset  :: Maybe Int
+  , closedordersCloseTime  :: CloseTime
+  } deriving Show
+
+instance Default ClosedOrdersOptions where
+  def = ClosedOrdersOptions False Nothing Nothing Nothing Nothing Both
+
+instance ToFormUrlEncoded ClosedOrdersOptions where
+  toFormUrlEncoded ClosedOrdersOptions{..} =
+    [ ("trades",T.toLower . toText . show $ closedordersIncludeTrades ) ]
+    ++
+    [ ("userref",r) | Just r <- [closedordersUserRef] ]
+    ++
+    [("start",toText start) | Just start <- [closedordersStart] ]
+    ++
+    [("end",toText end) | Just end <- [closedordersEnd] ]
+    ++
+    [ ("ofs",T.pack . show $ ofs) | Just ofs <- [closedordersOffset] ]
+    ++
+    [ ("closetime",T.toLower . T.pack . show $ closedordersCloseTime )]
+
+-----------------------------------------------------------------------------
+
+data CloseTime =
+    Open
+  | Close
+  | Both
+    deriving (Eq,Enum,Ord,Read,Show)
+
+-----------------------------------------------------------------------------
+
 data Config = Config
   { configAPIKey     :: ByteString
   , configPrivateKey :: ByteString
@@ -188,7 +224,6 @@ instance ToFormUrlEncoded OpenOrdersOptions where
     ++
     [ ("userref",toText r) | Just r <- [openordersUserRef] ]
 
-
 -----------------------------------------------------------------------------
 
 type OrderBook = Value
@@ -208,6 +243,25 @@ instance ToFormUrlEncoded OrderBookOptions where
 
 -----------------------------------------------------------------------------
 
+data QueryOrdersOptions = QueryOrdersOptions
+  { queryordersIncludeTrades :: Bool
+  , queryordersUserRef :: Maybe Text
+  , queryordersTxnIds :: [Text]
+  } deriving Show
+
+instance Default QueryOrdersOptions where
+  def = QueryOrdersOptions False Nothing [""]
+
+instance ToFormUrlEncoded QueryOrdersOptions where
+  toFormUrlEncoded QueryOrdersOptions{..} =
+    [ ("trades",T.toLower . toText . show $ queryordersIncludeTrades ) ]
+    ++
+    [ ("userref",toText r) | Just r <- [queryordersUserRef] ]
+    ++
+    [ ("txid", T.intercalate "," queryordersTxnIds ) | not . null $ queryordersTxnIds ]
+
+-----------------------------------------------------------------------------
+
 data SpreadOptions = SpreadOptions
   { spreadPair :: AssetPair
   , spreadSince :: Maybe Text
@@ -222,7 +276,6 @@ instance ToFormUrlEncoded SpreadOptions where
 -----------------------------------------------------------------------------
 
 type Spreads = Value
-
 
 -----------------------------------------------------------------------------
 
@@ -248,6 +301,17 @@ instance FromJSON Time where
     r <- parseResult x
     (t :: Int) <- r .: "unixtime"
     return . Time . posixSecondsToUTCTime . fromIntegral $ t
+
+-----------------------------------------------------------------------------
+
+data TimeBound =
+    DateTime UTCTime
+  | TxnId Text
+    deriving Show
+
+instance ToText TimeBound where
+  toText (DateTime ut) = T.pack . show . utcTimeToPOSIXSeconds $ ut
+  toText (TxnId ti) = ti
 
 -----------------------------------------------------------------------------
 

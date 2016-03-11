@@ -3,6 +3,7 @@ module Main where
 import Control.Monad
 import Control.Monad.IO.Class
 import qualified Data.ByteString.Char8 as BC (pack)
+import Data.Default
 import Data.Text
 import System.Environment
 import System.Exit
@@ -29,6 +30,8 @@ run cfg = void $ runKraken cfg $ do
   io =<< accountBalance
   io =<< tradeBalance   (TradeBalanceOptions Nothing Nothing)
   io =<< openOrders     (OpenOrdersOptions True Nothing)
+  io =<< closedOrders   def
+  io =<< queryOrders    (QueryOrdersOptions False Nothing ["123"]) 
   io =<< tradeVolume    (TradeVolumeOptions pairs)
 
  where
