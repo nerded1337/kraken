@@ -335,6 +335,22 @@ instance ToFormUrlEncoded OrderBookOptions where
 
 -----------------------------------------------------------------------------
 
+data PrivateRequest a = PrivateRequest
+  { privaterequestNonce :: Int
+  , privaterequestOTP   :: Maybe ByteString
+  , privaterequestData  :: a
+  }
+
+instance (ToFormUrlEncoded a) => ToFormUrlEncoded (PrivateRequest a) where
+  toFormUrlEncoded PrivateRequest{..} = 
+    [ ("nonce",T.pack . show $ privaterequestNonce) ]
+    ++
+    [ ("otp",decodeUtf8 otp) | Just otp <- [privaterequestOTP] ]
+    ++
+    toFormUrlEncoded privaterequestData
+
+-----------------------------------------------------------------------------
+
 data QueryLedgersOptions = QueryLedgersOptions
   { queryledgersIds :: [Text]
   } deriving Show
@@ -521,22 +537,6 @@ instance ToText TradeType where
     ClosedPosition  -> "closed position"
     ClosingPosition -> "closing position"
     NoPosition      -> "no position"
-
------------------------------------------------------------------------------
-
-data PrivReq a = PrivReq
-  { privreqNonce :: Int
-  , privreqOTP   :: Maybe ByteString
-  , privreqData  :: a
-  }
-
-instance (ToFormUrlEncoded a) => ToFormUrlEncoded (PrivReq a) where
-  toFormUrlEncoded PrivReq{..} = 
-    [ ("nonce",T.pack . show $ privreqNonce) ]
-    ++
-    [ ("otp"  ,decodeUtf8 otp) | Just otp <- [privreqOTP] ]
-    ++
-    toFormUrlEncoded privreqData
 
 -----------------------------------------------------------------------------
 

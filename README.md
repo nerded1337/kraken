@@ -9,9 +9,8 @@ Early stage work in progress.
 * Enforce non-empty lists for relevant requests (e.g. query trades?)
 * Prefix enums with enum name
 * Untyped requests
-* Return types
+* Return types for private account services
 * Private trading services
-* Refactor repetition in service types (first attempt failed - type level DSL does not seem to tolerate parameterised types in some contexts)
 * Restrict OHLC bar intervals
 * Handle 'since' / last' - JSON can be number or string
 * Add tests
