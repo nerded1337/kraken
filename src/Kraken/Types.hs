@@ -35,6 +35,9 @@ data Asset =
   | ZUSD
     deriving (Eq,FromJSON,Generic,Ord,Read,Show)
 
+instance Default Asset where
+  def = XXBT
+
 instance Hashable Asset
 
 instance ToText Asset where
@@ -44,7 +47,7 @@ instance ToText Asset where
 
 data AssetInfo = AssetInfo
   { assetinfoDisplayDecimals :: Int
-  , assetinfoClass :: Class
+  , assetinfoClass :: AssetClass
   , assetinfoDecimals :: Int
   , assetinfoAltName :: Text
   } deriving Show
@@ -59,15 +62,18 @@ instance FromJSON AssetInfo where
 -----------------------------------------------------------------------------
 
 data AssetOptions = AssetOptions
-  { assetClass :: Class
+  { assetClass :: AssetClass
   , assetAssets :: [Asset]
   } deriving Show
 
+instance Default AssetOptions where
+  def = AssetOptions Currency []
+
 instance ToFormUrlEncoded AssetOptions where
   toFormUrlEncoded AssetOptions{..} =
-    [ ("aclass",toText assetClass)
-    , ("asset",(T.intercalate "," . map toText) assetAssets)
-    ]
+    [ ("aclass",toText assetClass) ]
+    ++
+    [ ("asset",(T.intercalate "," . map toText) assetAssets) | not . null $ assetAssets ]
 
 -----------------------------------------------------------------------------
 
@@ -75,6 +81,9 @@ data AssetPair = AssetPair
   { assetpairBase  :: Asset
   , assetpairQuote :: Asset
   } deriving Show
+
+instance Default AssetPair where
+  def = AssetPair XXBT ZUSD
 
 instance ToText AssetPair where
   toText AssetPair{..} = T.concat [ toText assetpairBase
@@ -84,14 +93,18 @@ instance ToText AssetPair where
 -----------------------------------------------------------------------------
 
 data AssetPairInfo =
-    Info
-  | Leverage
-  | Fees
-  | Margin
+    AllInfo
+  | LeverageInfo
+  | FeesInfo
+  | MarginInfo
     deriving (Eq,Ord,Read,Show)
 
 instance ToText AssetPairInfo where
-  toText = T.toLower . T.pack . show
+  toText = \case
+    AllInfo -> "info"
+    LeverageInfo -> "leverage"
+    FeesInfo -> "fees"
+    MarginInfo -> "margin"
 
 -----------------------------------------------------------------------------
 
@@ -104,11 +117,14 @@ data AssetPairOptions = AssetPairOptions
   , assetpairPairs :: [AssetPair]
   } deriving Show
 
+instance Default AssetPairOptions where
+  def = AssetPairOptions AllInfo []
+
 instance ToFormUrlEncoded AssetPairOptions where
   toFormUrlEncoded AssetPairOptions{..} =
-    [ ("info",toText assetpairInfo)
-    , ("pair",(T.intercalate "," . map toText) assetpairPairs)
-    ]
+    [ ("info",toText assetpairInfo) ]
+    ++
+    [ ("pair",(T.intercalate "," . map toText) assetpairPairs) | (not . null) assetpairPairs ]
 
 -----------------------------------------------------------------------------
 
@@ -123,16 +139,19 @@ instance FromJSON Assets where
 
 -----------------------------------------------------------------------------
 
-data Class =
+data AssetClass =
     Currency
     deriving (Generic,Show)
 
-instance FromJSON Class where
+instance Default AssetClass where
+  def = Currency
+
+instance FromJSON AssetClass where
   parseJSON = withText "class" $ \case
     "currency" -> return Currency
     _          -> fail ""
 
-instance ToText Class where
+instance ToText AssetClass where
   toText = T.toLower . T.pack . show
 
 -----------------------------------------------------------------------------
@@ -169,7 +188,10 @@ data CloseTime =
     Open
   | Close
   | Both
-    deriving (Eq,Enum,Ord,Read,Show)
+    deriving (Eq,Enum,Ord,Show)
+
+instance Default CloseTime where
+  def = Both
 
 -----------------------------------------------------------------------------
 
@@ -193,11 +215,59 @@ mkConfig ak pk pw = case B64.decode pk of
 
 -----------------------------------------------------------------------------
 
+data LedgersOptions = LedgersOptions
+  { ledgersAssetClass :: AssetClass
+  , ledgersAssets :: [Asset]
+  , ledgersType :: Maybe LedgerType
+  , ledgersStart :: Maybe TimeBound
+  , ledgersEnd  :: Maybe TimeBound
+  , ledgersOffset  :: Maybe Int  
+  } deriving Show
+
+instance Default LedgersOptions where
+  def = LedgersOptions Currency [] Nothing Nothing Nothing Nothing
+
+instance ToFormUrlEncoded LedgersOptions where
+  toFormUrlEncoded LedgersOptions{..} = 
+    [ ("aclass",toText ledgersAssetClass) ]
+    ++
+    [ ("asset",(T.intercalate "," . map toText) ledgersAssets) | (not . null) ledgersAssets ]
+    ++
+    [ ("type",toText t) | Just t <- [ledgersType] ]
+    ++
+    [ ("start",toText start) | Just start <- [ledgersStart] ]
+    ++
+    [ ("end",toText end) | Just end <- [ledgersEnd] ]
+    ++
+    [ ("ofs",T.pack . show $ ofs) | Just ofs <- [ledgersOffset] ]
+
+-----------------------------------------------------------------------------
+
+data LedgerType =
+    AllLedgerTypes
+  | Deposit
+  | Withdrawal
+  | Trade
+  | Margin
+    deriving (Enum,Eq,Ord,Show)
+
+instance Default LedgerType where
+  def = AllLedgerTypes
+
+instance ToText LedgerType where
+  toText AllLedgerTypes = "all"
+  toText t = T.toLower . T.pack . show $ t
+
+-----------------------------------------------------------------------------
+
 data OHLCOptions = OHLCOptions
   { ohlcPair :: AssetPair
   , ohlcIntervalMins :: Int
   , ohlcSince :: Maybe Text
   } deriving Show
+
+instance Default OHLCOptions where
+  def = OHLCOptions def 1 Nothing
 
 instance ToFormUrlEncoded OHLCOptions where
   toFormUrlEncoded OHLCOptions{..} =
@@ -218,11 +288,30 @@ data OpenOrdersOptions = OpenOrdersOptions
   , openordersUserRef :: Maybe Text
   } deriving Show
 
+instance Default OpenOrdersOptions where
+  def = OpenOrdersOptions False Nothing
+
 instance ToFormUrlEncoded OpenOrdersOptions where
   toFormUrlEncoded OpenOrdersOptions{..} =
     [ ("trades",T.toLower . toText . show $ openordersIncludeTrades ) ]
     ++
     [ ("userref",toText r) | Just r <- [openordersUserRef] ]
+
+-----------------------------------------------------------------------------
+
+data OpenPositionsOptions = OpenPositionsOptions
+  { openpositionsTxnIds :: [Text]
+  , openpositionsIncludePL :: Bool
+  } deriving Show
+
+instance Default OpenPositionsOptions where
+  def = OpenPositionsOptions [] False
+
+instance ToFormUrlEncoded OpenPositionsOptions where
+  toFormUrlEncoded OpenPositionsOptions{..} =
+    [ ("txid", T.intercalate "," openpositionsTxnIds )
+    , ("docalcs",T.toLower . toText . show $ openpositionsIncludePL )
+    ]
 
 -----------------------------------------------------------------------------
 
@@ -235,11 +324,27 @@ data OrderBookOptions = OrderBookOptions
   , orderbookCount :: Maybe Int
   } deriving Show
 
+instance Default OrderBookOptions where
+  def = OrderBookOptions def Nothing
+
 instance ToFormUrlEncoded OrderBookOptions where
   toFormUrlEncoded OrderBookOptions{..} = 
     [ ("pair",toText orderbookPair) ]
     ++
     [ ("count",T.pack (show count)) | Just count <- [orderbookCount]]
+
+-----------------------------------------------------------------------------
+
+data QueryLedgersOptions = QueryLedgersOptions
+  { queryledgersIds :: [Text]
+  } deriving Show
+
+instance Default QueryLedgersOptions where
+  def = QueryLedgersOptions []
+
+instance ToFormUrlEncoded QueryLedgersOptions where
+  toFormUrlEncoded QueryLedgersOptions{..} =
+    [ ("txid", T.intercalate "," queryledgersIds) ]
 
 -----------------------------------------------------------------------------
 
@@ -258,7 +363,23 @@ instance ToFormUrlEncoded QueryOrdersOptions where
     ++
     [ ("userref",toText r) | Just r <- [queryordersUserRef] ]
     ++
-    [ ("txid", T.intercalate "," queryordersTxnIds ) | not . null $ queryordersTxnIds ]
+    [ ("txid", T.intercalate "," queryordersTxnIds ) ]
+
+-----------------------------------------------------------------------------
+
+data QueryTradesOptions = QueryTradesOptions
+  { querytradesTxnIds :: [Text]
+  , querytradesIncludeTrades :: Bool
+  } deriving Show
+
+instance Default QueryTradesOptions where
+  def = QueryTradesOptions [] False
+
+instance ToFormUrlEncoded QueryTradesOptions where
+  toFormUrlEncoded QueryTradesOptions{..} =
+    [ ("txid", T.intercalate "," querytradesTxnIds ) ]
+    ++
+    [ ("trades",T.toLower . toText . show $ querytradesIncludeTrades ) ]
 
 -----------------------------------------------------------------------------
 
@@ -266,6 +387,9 @@ data SpreadOptions = SpreadOptions
   { spreadPair :: AssetPair
   , spreadSince :: Maybe Text
   } deriving Show
+
+instance Default SpreadOptions where
+  def = SpreadOptions def Nothing
 
 instance ToFormUrlEncoded SpreadOptions where
   toFormUrlEncoded SpreadOptions{..} =
@@ -282,6 +406,9 @@ type Spreads = Value
 data TickerOptions = TickerOptions
   { tickerPairs :: [AssetPair]
   } deriving Show
+
+instance Default TickerOptions where
+  def = TickerOptions []
 
 instance ToFormUrlEncoded TickerOptions where
   toFormUrlEncoded TickerOptions{..} =
@@ -316,28 +443,18 @@ instance ToText TimeBound where
 -----------------------------------------------------------------------------
 
 data TradeBalanceOptions = TradeBalanceOptions
-  { tradebalanceClass :: Maybe Class
+  { tradebalanceAssetClass :: Maybe AssetClass
   , tradebalanceAsset :: Maybe Asset
   } deriving Show
 
+instance Default TradeBalanceOptions where
+  def = TradeBalanceOptions Nothing Nothing
+
 instance ToFormUrlEncoded TradeBalanceOptions where
   toFormUrlEncoded TradeBalanceOptions{..} =
-    [ ("aclass",toText c) | Just c <- [tradebalanceClass] ]
+    [ ("aclass",toText c) | Just c <- [tradebalanceAssetClass] ]
     ++
     [ ("asset",toText a) | Just a <- [tradebalanceAsset] ]
-
------------------------------------------------------------------------------
-
-data TradeOptions = TradeOptions
-  { tradePair :: AssetPair
-  , tradeSince :: Maybe Text
-  } deriving Show
-
-instance ToFormUrlEncoded TradeOptions where
-  toFormUrlEncoded TradeOptions{..} =
-    [ ("pair",toText tradePair)]
-    ++
-    [ ("since",since) | Just since <- [tradeSince] ]
 
 -----------------------------------------------------------------------------
 
@@ -345,8 +462,67 @@ type Trades = Value
 
 -----------------------------------------------------------------------------
 
-instance ToFormUrlEncoded () where
-  toFormUrlEncoded () = []
+data TradesHistoryOptions = TradesHistoryOptions
+  { tradeshistoryType :: Maybe TradeType
+  , tradeshistoryIncludeTrades :: Bool
+  , tradeshistoryStart :: Maybe TimeBound
+  , tradeshistoryEnd  :: Maybe TimeBound
+  , tradeshistoryOffset  :: Maybe Int
+  } deriving Show
+
+instance Default TradesHistoryOptions where
+  def = TradesHistoryOptions Nothing False Nothing Nothing Nothing
+
+instance ToFormUrlEncoded TradesHistoryOptions where
+  toFormUrlEncoded TradesHistoryOptions{..} =
+    [ ("type",toText t) | Just t <- [tradeshistoryType] ]
+    ++
+    [ ("trades",T.toLower . toText . show $ tradeshistoryIncludeTrades ) ]
+    ++
+    [("start",toText start) | Just start <- [tradeshistoryStart] ]
+    ++
+    [("end",toText end) | Just end <- [tradeshistoryEnd] ]
+    ++
+    [ ("ofs",T.pack . show $ ofs) | Just ofs <- [tradeshistoryOffset] ]
+
+-----------------------------------------------------------------------------
+
+data TradesOptions = TradesOptions
+  { tradesPair :: AssetPair
+  , tradesSince :: Maybe Text
+  } deriving Show
+
+instance Default TradesOptions where
+  def = TradesOptions def Nothing
+
+instance ToFormUrlEncoded TradesOptions where
+  toFormUrlEncoded TradesOptions{..} =
+    [ ("pair",toText tradesPair)]
+    ++
+    [ ("since",since) | Just since <- [tradesSince] ]
+
+-----------------------------------------------------------------------------
+
+data TradeType =
+    AllTradeTypes
+  | AnyPosition
+  | ClosedPosition
+  | ClosingPosition
+  | NoPosition
+    deriving (Enum,Eq,Ord,Show)
+
+instance Default TradeType where
+  def = AllTradeTypes
+
+instance ToText TradeType where
+  toText = \case 
+    AllTradeTypes   -> "all"
+    AnyPosition     -> "any position"
+    ClosedPosition  -> "closed position"
+    ClosingPosition -> "closing position"
+    NoPosition      -> "no position"
+
+-----------------------------------------------------------------------------
 
 data PrivReq a = PrivReq
   { privreqNonce :: Int
@@ -368,6 +544,9 @@ data TradeVolumeOptions = TradeVolumeOptions
   { tradevolumeFeePairs :: [AssetPair]
   } deriving Show
 
+instance Default TradeVolumeOptions where
+  def = TradeVolumeOptions []
+
 instance ToFormUrlEncoded TradeVolumeOptions where
   toFormUrlEncoded TradeVolumeOptions{..} =
     case tradevolumeFeePairs of 
@@ -375,6 +554,11 @@ instance ToFormUrlEncoded TradeVolumeOptions where
       _  -> [ ("pair",(T.intercalate "," . map toText) tradevolumeFeePairs)
             , ("fee-info","true")
             ]
+
+-----------------------------------------------------------------------------
+
+instance ToFormUrlEncoded () where
+  toFormUrlEncoded () = []
 
 -----------------------------------------------------------------------------
 

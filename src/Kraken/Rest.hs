@@ -45,14 +45,14 @@ type KrakenAPI             = TimeService
                              :<|> TickerService
                              :<|> OHLCService
                              :<|> OrderBookService
-                             :<|> TradeService
+                             :<|> TradesService
                              :<|> SpreadService
                              :<|> AccountBalanceService
                              :<|> TradeBalanceService
                              :<|> OpenOrdersService
                              :<|> ClosedOrdersService
                              :<|> QueryOrdersService
-                             :<|> TradeHistoryService
+                             :<|> TradesHistoryService
                              :<|> QueryTradesService
                              :<|> OpenPositionsService
                              :<|> LedgersService
@@ -88,10 +88,10 @@ type OrderBookService      = APIVersion
                              :> "Depth"
                              :> ReqBody '[FormUrlEncoded] OrderBookOptions
                              :> Post '[JSON] OrderBook
-type TradeService          = APIVersion
+type TradesService         = APIVersion
                              :> Public
                              :> "Trades"
-                             :> ReqBody '[FormUrlEncoded] TradeOptions
+                             :> ReqBody '[FormUrlEncoded] TradesOptions
                              :> Post '[JSON] Trades
 type SpreadService         = APIVersion
                              :> Public
@@ -133,40 +133,40 @@ type QueryOrdersService    = APIVersion
                              :> Header "API-Sign" Text
                              :> ReqBody '[FormUrlEncoded] (PrivReq QueryOrdersOptions)
                              :> Post '[JSON] Value
-type TradeHistoryService   = APIVersion
+type TradesHistoryService  = APIVersion
                              :> Private
                              :> "TradeHistory"
                              :> Header "API-Key" Text
                              :> Header "API-Sign" Text
-                             :> ReqBody '[FormUrlEncoded] (PrivReq ())
+                             :> ReqBody '[FormUrlEncoded] (PrivReq TradesHistoryOptions)
                              :> Post '[JSON] Value
 type QueryTradesService    = APIVersion
                              :> Private
                              :> "QueryTrades"
                              :> Header "API-Key" Text
                              :> Header "API-Sign" Text
-                             :> ReqBody '[FormUrlEncoded] (PrivReq ())
+                             :> ReqBody '[FormUrlEncoded] (PrivReq QueryTradesOptions)
                              :> Post '[JSON] Value
 type OpenPositionsService  = APIVersion
                              :> Private
                              :> "OpenPositions"
                              :> Header "API-Key" Text
                              :> Header "API-Sign" Text
-                             :> ReqBody '[FormUrlEncoded] (PrivReq ())
+                             :> ReqBody '[FormUrlEncoded] (PrivReq OpenPositionsOptions)
                              :> Post '[JSON] Value
 type LedgersService        = APIVersion
                              :> Private
                              :> "Ledgers"
                              :> Header "API-Key" Text
                              :> Header "API-Sign" Text
-                             :> ReqBody '[FormUrlEncoded] (PrivReq ())
+                             :> ReqBody '[FormUrlEncoded] (PrivReq LedgersOptions)
                              :> Post '[JSON] Value
 type QueryLedgersService   = APIVersion
                              :> Private
                              :> "QueryLedgers"
                              :> Header "API-Key" Text
                              :> Header "API-Sign" Text
-                             :> ReqBody '[FormUrlEncoded] (PrivReq ())
+                             :> ReqBody '[FormUrlEncoded] (PrivReq QueryLedgersOptions)
                              :> Post '[JSON] Value
 type TradeVolumeService    = APIVersion
                              :> Private
@@ -193,18 +193,18 @@ assetPairs_     :: AssetPairOptions -> ServantT AssetPairs
 tickers_        :: TickerOptions -> ServantT Tickers
 ohlcs_          :: OHLCOptions -> ServantT OHLCs
 orderBook_      :: OrderBookOptions -> ServantT OrderBook
-trades_         :: TradeOptions -> ServantT Trades
+trades_         :: TradesOptions -> ServantT Trades
 spreads_        :: SpreadOptions -> ServantT Spreads
 accountBalance_ :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
 tradeBalance_   :: Maybe Text -> Maybe Text -> PrivReq TradeBalanceOptions -> ServantT Value
 openOrders_     :: Maybe Text -> Maybe Text -> PrivReq OpenOrdersOptions -> ServantT Value
 closedOrders_   :: Maybe Text -> Maybe Text -> PrivReq ClosedOrdersOptions -> ServantT Value
 queryOrders_    :: Maybe Text -> Maybe Text -> PrivReq QueryOrdersOptions -> ServantT Value
-tradeHistory_   :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
-queryTrades_    :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
-openPositions_  :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
-ledgers_        :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
-queryLedgers_   :: Maybe Text -> Maybe Text -> PrivReq () -> ServantT Value
+tradesHistory_  :: Maybe Text -> Maybe Text -> PrivReq TradesHistoryOptions -> ServantT Value
+queryTrades_    :: Maybe Text -> Maybe Text -> PrivReq QueryTradesOptions -> ServantT Value
+openPositions_  :: Maybe Text -> Maybe Text -> PrivReq OpenPositionsOptions -> ServantT Value
+ledgers_        :: Maybe Text -> Maybe Text -> PrivReq LedgersOptions -> ServantT Value
+queryLedgers_   :: Maybe Text -> Maybe Text -> PrivReq QueryLedgersOptions -> ServantT Value
 tradeVolume_    :: Maybe Text -> Maybe Text -> PrivReq TradeVolumeOptions -> ServantT Value
 
 time_
@@ -220,7 +220,7 @@ time_
   :<|> openOrders_
   :<|> closedOrders_
   :<|> queryOrders_
-  :<|> tradeHistory_
+  :<|> tradesHistory_
   :<|> queryTrades_
   :<|> openPositions_
   :<|> ledgers_
@@ -247,7 +247,7 @@ ohlcs = lift . ohlcs_
 orderBook :: OrderBookOptions -> KrakenT OrderBook
 orderBook = lift . orderBook_
 
-trades :: TradeOptions -> KrakenT Trades
+trades :: TradesOptions -> KrakenT Trades
 trades = lift . trades_
 
 spreads :: SpreadOptions -> KrakenT Spreads
@@ -308,6 +308,36 @@ queryOrders opts = privateRequest
   (show . safeLink api $ (Proxy :: Proxy QueryOrdersService))
   opts
   queryOrders_
+
+tradesHistory :: TradesHistoryOptions -> KrakenT Value
+tradesHistory opts = privateRequest
+  (show . safeLink api $ (Proxy :: Proxy TradesHistoryService))
+  opts
+  tradesHistory_
+
+queryTrades :: QueryTradesOptions -> KrakenT Value
+queryTrades opts = privateRequest
+  (show . safeLink api $ (Proxy :: Proxy QueryTradesService))
+  opts
+  queryTrades_
+
+openPositions :: OpenPositionsOptions -> KrakenT Value
+openPositions opts = privateRequest
+  (show . safeLink api $ (Proxy :: Proxy OpenPositionsService))
+  opts
+  openPositions_
+
+ledgers :: LedgersOptions -> KrakenT Value
+ledgers opts = privateRequest
+  (show . safeLink api $ (Proxy :: Proxy LedgersService))
+  opts
+  ledgers_
+
+queryLedgers :: QueryLedgersOptions -> KrakenT Value
+queryLedgers opts = privateRequest
+  (show . safeLink api $ (Proxy :: Proxy QueryLedgersService))
+  opts
+  queryLedgers_
 
 tradeVolume :: TradeVolumeOptions -> KrakenT Value
 tradeVolume opts = privateRequest
