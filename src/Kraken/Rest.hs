@@ -160,20 +160,18 @@ privateRequest :: ToFormUrlEncoded a =>
                   (Maybe Text -> Maybe Text -> PrivateRequest a -> ServantT b) ->
                   KrakenT b
 privateRequest url d f = do
-  Config{..} <- ask
-  utcTime <- liftIO getCurrentTime
-  let apiKey       = decodeUtf8 configAPIKey
-      uri          = BC.pack $ "/" ++ url
-      nonce        = fromEnum . utcTimeToPOSIXSeconds $ utcTime
-      privReq      = PrivateRequest nonce configPassword d
-      postData     = BL.toStrict $ mimeRender (Proxy :: Proxy FormUrlEncoded)
-                                              privReq
-      nonceBytes   = BC.pack . show $ nonce
-      hashPostData = toBytes (hash (nonceBytes <> postData) :: Digest SHA256)
-      
-      msg          = uri <> hashPostData
-      hmacMsg      = hmac configPrivateKey msg :: HMAC SHA512
-      apiSign      = decodeUtf8 . B64.encode . toBytes $ hmacMsg
+  Config{..}       <- ask
+  utcTime          <- liftIO getCurrentTime
+  let apiKey       =  decodeUtf8 configAPIKey
+      uri          =  BC.pack $ "/" <> url
+      nonce        =  fromEnum . utcTimeToPOSIXSeconds $ utcTime
+      privReq      =  PrivateRequest nonce configPassword d
+      postData     =  BL.toStrict $ mimeRender (Proxy :: Proxy FormUrlEncoded) privReq
+      nonceBytes   =  BC.pack . show $ nonce
+      hashPostData =  toBytes (hash (nonceBytes <> postData) :: Digest SHA256)
+      msg          =  uri <> hashPostData
+      hmacMsg      =  hmac configPrivateKey msg :: HMAC SHA512
+      apiSign      =  decodeUtf8 . B64.encode . toBytes $ hmacMsg
   lift $ f (Just apiKey) (Just apiSign) privReq
 
 -----------------------------------------------------------------------------
