@@ -10,6 +10,7 @@ import           Data.Default
 import           Data.Hashable
 import           Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as H (fromList,toList)
+import           Data.Scientific
 import           Data.Text (Text)
 import qualified Data.Text as T (concat,intercalate,pack,toLower)
 import           Data.Text.Encoding (decodeUtf8)
@@ -42,6 +43,23 @@ instance Hashable Asset
 
 instance ToText Asset where
   toText = T.pack . show
+
+-----------------------------------------------------------------------------
+
+data AssetClass =
+    Currency
+    deriving (Generic,Show)
+
+instance Default AssetClass where
+  def = Currency
+
+instance FromJSON AssetClass where
+  parseJSON = withText "class" $ \case
+    "currency" -> return Currency
+    _          -> fail ""
+
+instance ToText AssetClass where
+  toText = T.toLower . T.pack . show
 
 -----------------------------------------------------------------------------
 
@@ -80,7 +98,14 @@ instance ToFormUrlEncoded AssetOptions where
 data AssetPair = AssetPair
   { assetpairBase  :: Asset
   , assetpairQuote :: Asset
-  } deriving Show
+  } deriving (Eq,Generic,Hashable,Show)
+
+instance Read AssetPair where
+  readsPrec p s =
+    let (bs,qs)                  = splitAt 4 s
+        (br :: [(Asset,String)]) = readsPrec p bs
+        (qr :: [(Asset,String)]) = readsPrec p qs
+    in  [ (AssetPair b q,"")  | (b,_) <- br, (q,_) <- qr ]
 
 instance Default AssetPair where
   def = AssetPair XXBT ZUSD
@@ -92,37 +117,85 @@ instance ToText AssetPair where
 
 -----------------------------------------------------------------------------
 
-data AssetPairInfo =
-    AllInfo
-  | LeverageInfo
-  | FeesInfo
-  | MarginInfo
-    deriving (Eq,Ord,Read,Show)
+data AssetPairInfo = AssetPairInfo
+  { assetpairinfoAltName :: Text
+  , assetpairinfoBaseAssetClass :: AssetClass
+  , assetpairinfoBaseAsset :: Asset
+  , assetpairinfoQuoteAssetClass :: AssetClass
+  , assetpairinfoQuoteAsset :: Asset
+  , assetpairinfoLot :: String -- TBC: enum
+  , assetpairinfoPairDecimals :: Int
+  , assetpairinfoLotDecimals :: Int
+  , assetpairinfoLotMultiplier :: Int
+  , assetpairinfoLeverageBuy :: [Scientific]
+  , assetpairinfoLeverageSell :: [Scientific]
+  , assetpairinfoFees :: [(Scientific,Scientific)]
+  , assetpairinfoFeesMaker :: [(Scientific,Scientific)]
+  , assetpairinfoFeeVolumeCurrency :: Asset
+  , assetpairinfoMarginCall :: Scientific
+  , assetpairinfoMarginStop :: Scientific
+  } deriving Show
 
-instance ToText AssetPairInfo where
-  toText = \case
-    AllInfo -> "info"
-    LeverageInfo -> "leverage"
-    FeesInfo -> "fees"
-    MarginInfo -> "margin"
+instance FromJSON AssetPairInfo where
+  parseJSON = withObject "asset pair info" $ \o -> AssetPairInfo
+    <$> o .: "altname"
+    <*> o .: "aclass_base"
+    <*> o .: "base"
+    <*> o .: "aclass_quote"
+    <*> o .: "quote"
+    <*> o .: "lot"
+    <*> o .: "pair_decimals"
+    <*> o .: "lot_decimals"
+    <*> o .: "lot_multiplier"
+    <*> o .: "leverage_buy"
+    <*> o .: "leverage_sell"
+    <*> o .: "fees"
+    <*> o .: "fees_maker"
+    <*> o .: "fee_volume_currency"
+    <*> o .: "margin_call"
+    <*> o .: "margin_stop"
 
 -----------------------------------------------------------------------------
 
-type AssetPairs = Value
+-- data AssetPairInfoType =
+--     AllInfo
+--   | LeverageInfo
+--   | FeesInfo
+--   | MarginInfo
+--     deriving (Eq,Ord,Read,Show)
+
+-- instance ToText AssetPairType where
+--   toText = \case
+--     AllInfo -> "info"
+--     LeverageInfo -> "leverage"
+--     FeesInfo -> "fees"
+--     MarginInfo -> "margin"
+
+-----------------------------------------------------------------------------
+
+data AssetPairs = AssetPairs
+  { unAssetPairs :: HashMap AssetPair AssetPairInfo
+  } deriving Show
+
+instance FromJSON AssetPairs where
+  parseJSON = parseResult
+    >=> parseJSON
+    >=> return . AssetPairs . H.fromList . map (first read) . H.toList
 
 -----------------------------------------------------------------------------
 
 data AssetPairOptions = AssetPairOptions
-  { assetpairInfo  :: AssetPairInfo
-  , assetpairPairs :: [AssetPair]
+  --{ assetpairInfoType  :: AssetPairInfoType
+  { assetpairPairs :: [AssetPair]
   } deriving Show
 
 instance Default AssetPairOptions where
-  def = AssetPairOptions AllInfo []
+  def = AssetPairOptions []
 
 instance ToFormUrlEncoded AssetPairOptions where
   toFormUrlEncoded AssetPairOptions{..} =
-    [ ("info",toText assetpairInfo) ]
+    -- [ ("info",toText assetpairInfoType) ]
+    [ ("info","info") ]
     ++
     [ ("pair",(T.intercalate "," . map toText) assetpairPairs) | (not . null) assetpairPairs ]
 
@@ -136,23 +209,6 @@ instance FromJSON Assets where
   parseJSON = parseResult
     >=> parseJSON
     >=> return . Assets . H.fromList . map (first read) . H.toList
-
------------------------------------------------------------------------------
-
-data AssetClass =
-    Currency
-    deriving (Generic,Show)
-
-instance Default AssetClass where
-  def = Currency
-
-instance FromJSON AssetClass where
-  parseJSON = withText "class" $ \case
-    "currency" -> return Currency
-    _          -> fail ""
-
-instance ToText AssetClass where
-  toText = T.toLower . T.pack . show
 
 -----------------------------------------------------------------------------
 
@@ -460,17 +516,17 @@ instance ToText TimeBound where
 
 data TradeBalanceOptions = TradeBalanceOptions
   { tradebalanceAssetClass :: Maybe AssetClass
-  , tradebalanceAsset :: Maybe Asset
+  , tradebalanceAsset :: Asset
   } deriving Show
 
 instance Default TradeBalanceOptions where
-  def = TradeBalanceOptions Nothing Nothing
+  def = TradeBalanceOptions (Just Currency) ZUSD
 
 instance ToFormUrlEncoded TradeBalanceOptions where
   toFormUrlEncoded TradeBalanceOptions{..} =
     [ ("aclass",toText c) | Just c <- [tradebalanceAssetClass] ]
     ++
-    [ ("asset",toText a) | Just a <- [tradebalanceAsset] ]
+    [ ("asset",toText tradebalanceAsset) ]
 
 -----------------------------------------------------------------------------
 

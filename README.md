@@ -6,6 +6,9 @@ Early stage work in progress.
 
 ## To do
 
+* Improve on first hack at AssetPair Read instance (could use another parser)
+* Resolve duplication in private user data functions (first attempt failed due to difficulty in factoring out Proxy's)
+* Env vars for api keys: handle read failure, maybe use an env var library (e.g. envy)
 * Enforce non-empty lists for relevant requests (e.g. query trades?)
 * Prefix enums with enum name
 * Untyped requests

@@ -30,6 +30,7 @@ library
                      , data-default
                      , either
                      , hashable
+                     , scientific
                      , servant
                      , servant-client
                      , text
