@@ -1,6 +1,6 @@
 name:                kraken
 version:             0.1.0.0
-synopsis:            TODO Initial project template from stack
+synopsis:            Kraken exchange API binding
 description:         Please see README.md
 homepage:            http://github.com/cmahon/kraken
 license:             BSD3
@@ -37,6 +37,7 @@ library
                      , time
                      , transformers
                      , unordered-containers
+                     , vector
   default-extensions:  DataKinds
                        DeriveGeneric
                        DeriveAnyClass

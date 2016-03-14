@@ -9,13 +9,15 @@ import qualified Data.ByteString.Base64 as B64
 import           Data.Default
 import           Data.Hashable
 import           Data.HashMap.Strict (HashMap)
-import qualified Data.HashMap.Strict as H (fromList,toList)
+import qualified Data.HashMap.Strict as H (delete,filter,fromList,map,toList)
+import           Data.Maybe
 import           Data.Scientific
 import           Data.Text (Text)
-import qualified Data.Text as T (concat,intercalate,pack,toLower)
+import qualified Data.Text as T (concat,intercalate,pack,toLower,unpack)
 import           Data.Text.Encoding (decodeUtf8)
 import           Data.Time
 import           Data.Time.Clock.POSIX
+import           Data.Vector ((!))
 import           GHC.Generics
 import           Servant.API
 
@@ -299,6 +301,30 @@ instance ToText LedgerType where
 
 -----------------------------------------------------------------------------
 
+data OHLC = OHLC
+  { ohlcTime :: UTCTime
+  , ohlcOpen :: Scientific
+  , ohlcHigh :: Scientific
+  , ohlcLow :: Scientific
+  , ohlcClose :: Scientific
+  , ohlcVWAP :: Scientific
+  , ohlcVol :: Scientific
+  , ohlcNumTrades :: Int
+  } deriving Show
+
+instance FromJSON OHLC where
+  parseJSON = withArray "OHLC" $ \v -> OHLC
+    <$> fmap (posixSecondsToUTCTime . fromInteger) (parseJSON (v ! 0))
+    <*> fmap read (parseJSON (v ! 1))
+    <*> fmap read (parseJSON (v ! 2))
+    <*> fmap read (parseJSON (v ! 3))
+    <*> fmap read (parseJSON (v ! 4))
+    <*> fmap read (parseJSON (v ! 5))
+    <*> fmap read (parseJSON (v ! 6))
+    <*> parseJSON (v ! 7) 
+
+-----------------------------------------------------------------------------
+
 data OHLCOptions = OHLCOptions
   { ohlcPair :: AssetPair
   , ohlcIntervalMins :: Int
@@ -318,7 +344,18 @@ instance ToFormUrlEncoded OHLCOptions where
 
 -----------------------------------------------------------------------------
 
-type OHLCs = Value
+data OHLCs = OHLCs
+  { ohlcsLast :: UTCTime
+  , ohlcsOHLCs :: HashMap AssetPair [OHLC]
+  } deriving Show
+
+instance FromJSON OHLCs where
+  parseJSON = parseResult >=> withObject "OHLCs" (\o -> do
+    ohlcsLast <- fmap (posixSecondsToUTCTime . fromInteger) (o .: "last")
+    let o' = H.map (parseMaybe (parseJSON :: Value -> Parser [OHLC])) (H.delete "last" o)
+    let o'' = (H.map fromJust . H.filter isJust) o'
+    let ohlcsOHLCs = (H.fromList . map (first (read . T.unpack)) . H.toList) o''
+    return OHLCs{..})
 
 -----------------------------------------------------------------------------
 
@@ -469,8 +506,8 @@ data TickerInfo = TickerInfo
   , tickerVol24Hours :: Scientific
   , tickerVWAPToday :: Scientific
   , tickerVWAP24Hours :: Scientific
-  , tickerNumTradesToday :: Scientific
-  , tickerNumTrades24Hours :: Scientific
+  , tickerNumTradesToday :: Int
+  , tickerNumTrades24Hours :: Int
   , tickerLowToday :: Scientific
   , tickerLow24Hours :: Scientific
   , tickerHighToday :: Scientific
@@ -485,7 +522,7 @@ instance FromJSON TickerInfo where
     [tickerLastTradePrice,tickerLastTradeVol] <- (map read) <$> o .: "c"
     [tickerVolToday,tickerVol24Hours] <- (map read) <$> o .: "v"
     [tickerVWAPToday,tickerVWAP24Hours] <- (map read) <$> o .: "p"
-    [tickerNumTradesToday,tickerNumTrades24Hours] <- o .: "t"
+    [tickerNumTradesToday,tickerNumTrades24Hours] <- o .: "t" :: Parser [Int]
     [tickerLowToday,tickerLow24Hours] <- (map read) <$> o .: "l"
     [tickerHighToday,tickerHigh24Hours] <- (map read) <$> o .: "h"
     tickerOpen <- read <$> o .: "o"
@@ -506,8 +543,6 @@ instance ToFormUrlEncoded TickerOptions where
     ]
 
 -----------------------------------------------------------------------------
-
--- type Ticker = Value
 
 data Ticker = Ticker
   { unTicker :: HashMap AssetPair TickerInfo
