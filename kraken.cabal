@@ -49,7 +49,7 @@ library
 
 executable kraken
   default-language:    Haskell2010
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
   hs-source-dirs:      app
   main-is:             Main.hs
   build-depends:       base

@@ -101,11 +101,12 @@ data AssetPair = AssetPair
   } deriving (Eq,Generic,Hashable,Show)
 
 instance Read AssetPair where
-  readsPrec p s =
-    let (bs,qs)                  = splitAt 4 s
-        (br :: [(Asset,String)]) = readsPrec p bs
-        (qr :: [(Asset,String)]) = readsPrec p qs
-    in  [ (AssetPair b q,"")  | (b,_) <- br, (q,_) <- qr ]
+  readsPrec p s | length s >= 8 = do let (bs,qs) = splitAt 4 s
+                                     (b,br) <- readsPrec p bs
+                                     guard (null br)
+                                     (q,qr) <- readsPrec p qs
+                                     return (AssetPair b q,qr)
+                | otherwise     = []
 
 instance Default AssetPair where
   def = AssetPair XXBT ZUSD
@@ -157,22 +158,6 @@ instance FromJSON AssetPairInfo where
 
 -----------------------------------------------------------------------------
 
--- data AssetPairInfoType =
---     AllInfo
---   | LeverageInfo
---   | FeesInfo
---   | MarginInfo
---     deriving (Eq,Ord,Read,Show)
-
--- instance ToText AssetPairType where
---   toText = \case
---     AllInfo -> "info"
---     LeverageInfo -> "leverage"
---     FeesInfo -> "fees"
---     MarginInfo -> "margin"
-
------------------------------------------------------------------------------
-
 data AssetPairs = AssetPairs
   { unAssetPairs :: HashMap AssetPair AssetPairInfo
   } deriving Show
@@ -185,7 +170,6 @@ instance FromJSON AssetPairs where
 -----------------------------------------------------------------------------
 
 data AssetPairOptions = AssetPairOptions
-  --{ assetpairInfoType  :: AssetPairInfoType
   { assetpairPairs :: [AssetPair]
   } deriving Show
 
@@ -194,7 +178,6 @@ instance Default AssetPairOptions where
 
 instance ToFormUrlEncoded AssetPairOptions where
   toFormUrlEncoded AssetPairOptions{..} =
-    -- [ ("info",toText assetpairInfoType) ]
     [ ("info","info") ]
     ++
     [ ("pair",(T.intercalate "," . map toText) assetpairPairs) | (not . null) assetpairPairs ]
@@ -475,6 +458,41 @@ type Spreads = Value
 
 -----------------------------------------------------------------------------
 
+data TickerInfo = TickerInfo
+  { tickerAskPrice :: Scientific
+  , tickerAskVol :: Scientific
+  , tickerBidPrice :: Scientific
+  , tickerBidVol :: Scientific
+  , tickerLastTradePrice :: Scientific
+  , tickerLastTradeVol :: Scientific
+  , tickerVolToday :: Scientific
+  , tickerVol24Hours :: Scientific
+  , tickerVWAPToday :: Scientific
+  , tickerVWAP24Hours :: Scientific
+  , tickerNumTradesToday :: Scientific
+  , tickerNumTrades24Hours :: Scientific
+  , tickerLowToday :: Scientific
+  , tickerLow24Hours :: Scientific
+  , tickerHighToday :: Scientific
+  , tickerHigh24Hours :: Scientific
+  , tickerOpen :: Scientific
+  } deriving Show
+
+instance FromJSON TickerInfo where
+  parseJSON = withObject "ticker info" $ \o -> do
+    [tickerAskPrice,_,tickerAskVol] <- (map read) <$> o .: "a"
+    [tickerBidPrice,_,tickerBidVol] <- (map read) <$> o .: "b"
+    [tickerLastTradePrice,tickerLastTradeVol] <- (map read) <$> o .: "c"
+    [tickerVolToday,tickerVol24Hours] <- (map read) <$> o .: "v"
+    [tickerVWAPToday,tickerVWAP24Hours] <- (map read) <$> o .: "p"
+    [tickerNumTradesToday,tickerNumTrades24Hours] <- o .: "t"
+    [tickerLowToday,tickerLow24Hours] <- (map read) <$> o .: "l"
+    [tickerHighToday,tickerHigh24Hours] <- (map read) <$> o .: "h"
+    tickerOpen <- read <$> o .: "o"
+    return TickerInfo{..}
+
+-----------------------------------------------------------------------------
+
 data TickerOptions = TickerOptions
   { tickerPairs :: [AssetPair]
   } deriving Show
@@ -489,7 +507,16 @@ instance ToFormUrlEncoded TickerOptions where
 
 -----------------------------------------------------------------------------
 
-type Tickers = Value
+-- type Ticker = Value
+
+data Ticker = Ticker
+  { unTicker :: HashMap AssetPair TickerInfo
+  } deriving Show
+
+instance FromJSON Ticker where
+  parseJSON = parseResult
+    >=> parseJSON
+    >=> return . Ticker . H.fromList . map (first read) . H.toList
 
 -----------------------------------------------------------------------------
 

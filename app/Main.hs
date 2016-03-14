@@ -3,10 +3,8 @@ module Main where
 import Control.Concurrent
 import Control.Monad
 import Control.Monad.IO.Class
-import qualified Data.ByteString.Char8 as BC (pack)
 import Data.Default
-import Data.Text
-import System.Environment
+import Data.Text()
 import System.Exit
 
 import Kraken.Rest
@@ -23,7 +21,7 @@ run cfg = void $ runKraken cfg $ do
   io =<< time
   io =<< assets         (AssetOptions Currency [XXBT,XETH])
   io =<< assetPairs     (AssetPairOptions pairs)
-  -- io =<< tickers        (TickerOptions pairs)
+  io =<< ticker         (TickerOptions pairs)
   -- io =<< ohlcs          (OHLCOptions xbtusd 60 Nothing)
   -- io =<< orderBook      (OrderBookOptions xbtusd (Just 5))
   -- io =<< trades         (TradesOptions xbtusd Nothing)

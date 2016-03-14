@@ -65,7 +65,7 @@ type KrakenAPI             = TimeService
 type TimeService           = PublicService  "Time"          ()                   Time
 type AssetService          = PublicService  "Assets"        AssetOptions         Assets
 type AssetPairService      = PublicService  "AssetPairs"    AssetPairOptions     AssetPairs
-type TickerService         = PublicService  "Ticker"        TickerOptions        Tickers
+type TickerService         = PublicService  "Ticker"        TickerOptions        Ticker
 type OHLCService           = PublicService  "OHLC"          OHLCOptions          OHLCs
 type OrderBookService      = PublicService  "Depth"         OrderBookOptions     OrderBook
 type TradesService         = PublicService  "Trades"        TradesOptions        Trades
@@ -115,7 +115,7 @@ api = Proxy
 time_           :: () -> ServantT Time
 assets_         :: AssetOptions -> ServantT Assets
 assetPairs_     :: AssetPairOptions -> ServantT AssetPairs
-tickers_        :: TickerOptions -> ServantT Tickers
+ticker_         :: TickerOptions -> ServantT Ticker
 ohlcs_          :: OHLCOptions -> ServantT OHLCs
 orderBook_      :: OrderBookOptions -> ServantT OrderBook
 trades_         :: TradesOptions -> ServantT Trades
@@ -135,7 +135,7 @@ tradeVolume_    :: Maybe Text -> Maybe Text -> PrivateRequest TradeVolumeOptions
 time_
   :<|> assets_
   :<|> assetPairs_
-  :<|> tickers_
+  :<|> ticker_
   :<|> ohlcs_
   :<|> orderBook_
   :<|> trades_
@@ -185,8 +185,8 @@ assets = lift . assets_
 assetPairs :: AssetPairOptions -> KrakenT AssetPairs
 assetPairs = lift . assetPairs_
 
-tickers :: TickerOptions -> KrakenT Tickers
-tickers = lift . tickers_
+ticker :: TickerOptions -> KrakenT Ticker
+ticker = lift . ticker_
 
 ohlcs :: OHLCOptions -> KrakenT OHLCs
 ohlcs = lift . ohlcs_
