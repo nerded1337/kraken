@@ -9,8 +9,9 @@ import qualified Data.ByteString.Base64 as B64
 import           Data.Default
 import           Data.Hashable
 import           Data.HashMap.Strict (HashMap)
-import qualified Data.HashMap.Strict as H (delete,filter,fromList,map,toList)
+import qualified Data.HashMap.Strict as H (delete,filter,fromList,keys,map,toList)
 import           Data.Maybe
+import           Data.Ratio
 import           Data.Scientific
 import           Data.Text (Text)
 import qualified Data.Text as T (concat,intercalate,pack,toLower,unpack)
@@ -23,8 +24,7 @@ import           Servant.API
 
 -----------------------------------------------------------------------------
 
-type Host = String
-type Port = Int
+
 
 -----------------------------------------------------------------------------
 
@@ -256,6 +256,10 @@ mkConfig ak pk pw = case B64.decode pk of
 
 -----------------------------------------------------------------------------
 
+type Host = String
+
+-----------------------------------------------------------------------------
+
 data LedgersOptions = LedgersOptions
   { ledgersAssetClass :: AssetClass
   , ledgersAssets :: [Asset]
@@ -391,13 +395,23 @@ instance ToFormUrlEncoded OpenPositionsOptions where
 
 -----------------------------------------------------------------------------
 
-type OrderBook = Value
+data OrderBookEntry = OrderBookEntry
+  { orderbookentryPrice :: Scientific
+  , orderbookentryVol :: Scientific
+  , orderbookentryTime :: UTCTime
+  } deriving Show
+
+instance FromJSON OrderBookEntry where
+  parseJSON = withArray "OrderBookEntry" $ \v -> OrderBookEntry
+    <$> fmap read (parseJSON (v ! 0))
+    <*> fmap read (parseJSON (v ! 1))
+    <*> fmap (posixSecondsToUTCTime . fromInteger) (parseJSON (v ! 2))
 
 -----------------------------------------------------------------------------
 
 data OrderBookOptions = OrderBookOptions
-  { orderbookPair :: AssetPair
-  , orderbookCount :: Maybe Int
+  { orderbookoptionsPair :: AssetPair
+  , orderbookoptionsCount :: Maybe Int
   } deriving Show
 
 instance Default OrderBookOptions where
@@ -405,9 +419,53 @@ instance Default OrderBookOptions where
 
 instance ToFormUrlEncoded OrderBookOptions where
   toFormUrlEncoded OrderBookOptions{..} = 
-    [ ("pair",toText orderbookPair) ]
+    [ ("pair",toText orderbookoptionsPair) ]
     ++
-    [ ("count",T.pack (show count)) | Just count <- [orderbookCount]]
+    [ ("count",T.pack (show count)) | Just count <- [orderbookoptionsCount]]
+
+-----------------------------------------------------------------------------
+
+data OrderBook = OrderBook
+  { orderbookPair :: AssetPair
+  , orderbookBids :: [OrderBookEntry]
+  , orderbookAsks :: [OrderBookEntry]
+  } deriving Show
+
+instance FromJSON OrderBook where
+  parseJSON = parseResult >=> parseJSON >=> withObject "OrderBook" (\o -> do
+    let p = head $ H.keys o
+    ob <- o .: p
+    bs <- ob .: "bids"
+    as <- ob .: "asks"
+    return $ OrderBook (read $ T.unpack p) bs as)
+
+-----------------------------------------------------------------------------
+
+data OrderDir =
+    Buy
+  | Sell
+    deriving Show
+
+instance FromJSON OrderDir where
+  parseJSON (String "b") = return Buy
+  parseJSON (String "s") = return Sell
+  parseJSON _            = mzero
+
+-----------------------------------------------------------------------------
+
+data OrderType = 
+    Market
+  | Limit
+    deriving Show
+
+instance FromJSON OrderType where
+  parseJSON (String "m") = return Market
+  parseJSON (String "l") = return Limit
+  parseJSON _            = mzero
+
+-----------------------------------------------------------------------------
+
+type Port = Int
 
 -----------------------------------------------------------------------------
 
@@ -475,6 +533,20 @@ instance ToFormUrlEncoded QueryTradesOptions where
 
 -----------------------------------------------------------------------------
 
+data SpreadInfo = SpreadInfo
+  { spreadinfoTime :: UTCTime
+  , spreadinfoBid :: Scientific
+  , spreadinfoAsk :: Scientific
+  } deriving Show
+
+instance FromJSON SpreadInfo where
+  parseJSON = withArray "SpreadInfo" $ \v -> SpreadInfo
+    <$> fmap (posixSecondsToUTCTime . fromInteger) (parseJSON (v ! 0))
+    <*> fmap read (parseJSON (v ! 1))
+    <*> fmap read (parseJSON (v ! 2))
+
+-----------------------------------------------------------------------------
+
 data SpreadOptions = SpreadOptions
   { spreadPair :: AssetPair
   , spreadSince :: Maybe Text
@@ -491,7 +563,19 @@ instance ToFormUrlEncoded SpreadOptions where
 
 -----------------------------------------------------------------------------
 
-type Spreads = Value
+data Spreads = Spreads
+  { spreadsPair :: AssetPair
+  , spreadsLast :: UTCTime
+  , spreadsSpreads :: [SpreadInfo]
+  } deriving Show
+
+instance FromJSON Spreads where
+  parseJSON = parseResult >=> withObject "Spreads" (\o -> do
+    lt <- (o .: "last") >>= parseJSON
+    let l = (posixSecondsToUTCTime . fromInteger) lt
+    let (p,ssj) = (head . H.toList . H.delete "last") o
+    ss <- parseJSON ssj
+    return $ Spreads (read $ T.unpack p) l ss)
 
 -----------------------------------------------------------------------------
 
@@ -592,7 +676,39 @@ instance ToFormUrlEncoded TradeBalanceOptions where
 
 -----------------------------------------------------------------------------
 
-type Trades = Value
+data TradeInfo = TradeInfo
+  { tradeinfoPrice :: Scientific
+  , tradeinfoVol :: Scientific
+  , tradeinfoTime :: UTCTime
+  , tradeinfoDir :: OrderDir
+  , tradeinfoType :: OrderType
+  , tradeinfoMisc :: Text
+  } deriving Show
+
+instance FromJSON TradeInfo where
+  parseJSON = withArray "TradeInfo" $ \v -> TradeInfo
+    <$> fmap read (parseJSON (v ! 0))
+    <*> fmap read (parseJSON (v ! 1))
+    <*> fmap (posixSecondsToUTCTime . fromInteger) (parseJSON (v ! 2))
+    <*> parseJSON (v ! 3)
+    <*> parseJSON (v ! 4)
+    <*> parseJSON (v ! 5)
+
+-----------------------------------------------------------------------------
+
+data Trades = Trades
+  { tradesPair :: AssetPair
+  , tradesLast :: UTCTime
+  , tradesTrades :: [TradeInfo]
+  } deriving Show
+
+instance FromJSON Trades where
+  parseJSON = parseResult >=> withObject "Trades" (\o -> do
+    lt <- (o .: "last") >>= parseJSON
+    let l = (posixSecondsToUTCTime . fromRational . (% 1000000000) . fromInteger . read) lt
+    let (p,tsj) = (head . H.toList . H.delete "last") o
+    ts <- parseJSON tsj
+    return $ Trades (read $ T.unpack p) l ts)
 
 -----------------------------------------------------------------------------
 
@@ -622,8 +738,8 @@ instance ToFormUrlEncoded TradesHistoryOptions where
 -----------------------------------------------------------------------------
 
 data TradesOptions = TradesOptions
-  { tradesPair :: AssetPair
-  , tradesSince :: Maybe Text
+  { tradesoptionsPair :: AssetPair
+  , tradesoptionsSince :: Maybe Text
   } deriving Show
 
 instance Default TradesOptions where
@@ -631,9 +747,9 @@ instance Default TradesOptions where
 
 instance ToFormUrlEncoded TradesOptions where
   toFormUrlEncoded TradesOptions{..} =
-    [ ("pair",toText tradesPair)]
+    [ ("pair",toText tradesoptionsPair)]
     ++
-    [ ("since",since) | Just since <- [tradesSince] ]
+    [ ("since",since) | Just since <- [tradesoptionsSince] ]
 
 -----------------------------------------------------------------------------
 

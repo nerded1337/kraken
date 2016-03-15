@@ -18,14 +18,14 @@ main = getConfig >>= either (const exitFailure) run
   
 run :: Config -> IO ()
 run cfg = void $ runKraken cfg $ do
-  io =<< time
-  io =<< assets         (AssetOptions Currency [XXBT,XETH])
-  io =<< assetPairs     (AssetPairOptions pairs)
-  io =<< ticker         (TickerOptions pairs)
-  io =<< ohlcs          (OHLCOptions xbtusd 60 Nothing)
+  -- io =<< time
+  -- io =<< assets         (AssetOptions Currency [XXBT,XETH])
+  -- io =<< assetPairs     (AssetPairOptions pairs)
+  -- io =<< ticker         (TickerOptions pairs)
+  -- io =<< ohlcs          (OHLCOptions xbtusd 60 Nothing)
   -- io =<< orderBook      (OrderBookOptions xbtusd (Just 5))
   -- io =<< trades         (TradesOptions xbtusd Nothing)
-  -- io =<< spreads        (SpreadOptions xbtusd Nothing)
+  io =<< spreads        (SpreadOptions xbtusd Nothing)
   -- io =<< accountBalance
   -- io =<< tradeBalance   def
   -- io =<< openOrders     (OpenOrdersOptions True Nothing)
