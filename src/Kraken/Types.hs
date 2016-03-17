@@ -21,6 +21,7 @@ import           Data.Time.Clock.POSIX
 import           Data.Vector ((!))
 import           GHC.Generics
 import           Servant.API
+import           System.Envy
 
 -----------------------------------------------------------------------------
 
@@ -249,6 +250,19 @@ mkConfig :: ByteString -> ByteString -> Maybe ByteString -> Either String Config
 mkConfig ak pk pw = case B64.decode pk of
   Right pkd -> Right $ Config ak pkd pw
   Left  e   -> Left e
+
+-----------------------------------------------------------------------------
+
+data EnvVars = EnvVars
+  { envvarsAPIKey        :: Maybe ByteString
+  , envvarsPrivateKeyB64 :: Maybe ByteString
+  , envvarsPassword      :: Maybe ByteString
+  } deriving (Generic,Show)
+
+instance FromEnv EnvVars where
+  fromEnv = EnvVars <$> envMaybe "KRAKEN_API_KEY"
+                    <*> envMaybe "KRAKEN_API_PRIVKEY"
+                    <*> envMaybe "KRAKEN_API_PASSWORD"
 
 -----------------------------------------------------------------------------
 

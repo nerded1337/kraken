@@ -29,6 +29,7 @@ library
                      , cryptohash
                      , data-default
                      , either
+                     , envy
                      , hashable
                      , scientific
                      , servant
@@ -42,6 +43,7 @@ library
                        DeriveGeneric
                        DeriveAnyClass
                        FlexibleInstances
+                       KindSignatures
                        LambdaCase
                        OverloadedStrings
                        RecordWildCards

@@ -30,12 +30,13 @@ Early stage work in progress.
 * [ ] Add underscore prefix to field names (for lens derivation)
 * [ ] Resolve duplication in private user data functions (first attempt failed due to difficulty in factoring out Proxy's)
 * [ ] Extract common functionality in JSON parsers
-* [ ] Env vars for api keys: handle read failure, maybe use an env var library (e.g. envy)
+* [X] Env vars for api keys: handle read failure, maybe use an env var library (e.g. envy), make optional (for public services)
 * [ ] Enforce non-empty lists for relevant requests (e.g. query trades?)
 * [ ] Prefix enums with enum name
 * [ ] Untyped requests
 * [ ] Private trading services
 * [ ] Restrict OHLC bar intervals
-* [ ] Handle 'since' / last' - JSON can be number or string
+* [ ] Handle 'since' / 'last' - JSON can be number or string
 * [ ] Add tests
 * [ ] Develop kraken executable into a full command-line tool
+* [ ] Logging

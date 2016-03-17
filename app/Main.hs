@@ -7,9 +7,7 @@ import Data.Default
 import Data.Text()
 import System.Exit
 
-import Kraken.Rest
-import Kraken.Types
-import Kraken.Util
+import Kraken.API
 
 -----------------------------------------------------------------------------
 
@@ -26,7 +24,7 @@ run cfg = void $ runKraken cfg $ do
   -- io =<< orderBook      (OrderBookOptions xbtusd (Just 5))
   -- io =<< trades         (TradesOptions xbtusd Nothing)
   io =<< spreads        (SpreadOptions xbtusd Nothing)
-  -- io =<< accountBalance
+  io =<< accountBalance
   -- io =<< tradeBalance   def
   -- io =<< openOrders     (OpenOrdersOptions True Nothing)
   -- io =<< closedOrders   def

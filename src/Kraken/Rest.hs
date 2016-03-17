@@ -1,5 +1,3 @@
-{-# LANGUAGE KindSignatures #-}
-
 module Kraken.Rest where
 
 import           Control.Monad.IO.Class
