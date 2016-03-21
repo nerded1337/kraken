@@ -263,5 +263,3 @@ tradeVolume opts = privateRequest
   (show . safeLink api $ (Proxy :: Proxy TradeVolumeService))
   opts
   tradeVolume_
-
-
