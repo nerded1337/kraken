@@ -158,7 +158,7 @@ instance FromJSON AssetPairInfo where
 -----------------------------------------------------------------------------
 
 data AssetPairs = AssetPairs
-  { unAssetPairs :: HashMap AssetPair AssetPairInfo
+  { assetpairsPairs :: HashMap AssetPair AssetPairInfo
   } deriving Show
 
 instance FromJSON AssetPairs where
@@ -184,13 +184,33 @@ instance ToFormUrlEncoded AssetPairOptions where
 -----------------------------------------------------------------------------
 
 newtype Assets = Assets
-  { unAssets :: HashMap Asset AssetInfo
+  { assetsAssets :: HashMap Asset AssetInfo
   } deriving Show
 
 instance FromJSON Assets where
   parseJSON = parseResult
     >=> parseJSON
     >=> return . Assets . H.fromList . map (first read) . H.toList
+
+-----------------------------------------------------------------------------
+
+data BalanceInfo = BalanceInfo
+  { balanceinfoBalance :: Scientific
+  } deriving Show
+
+instance FromJSON BalanceInfo where
+  parseJSON = withText "BalanceInfo" $ return . BalanceInfo . read . T.unpack
+
+-----------------------------------------------------------------------------
+
+data Balance = Balance
+  { balanceBalances :: HashMap Asset BalanceInfo
+  } deriving Show
+
+instance FromJSON Balance where
+  parseJSON = parseResult
+    >=> parseJSON
+    >=> return . Balance . H.fromList . map (first read) . H.toList
 
 -----------------------------------------------------------------------------
 
@@ -667,6 +687,33 @@ data TimeBound =
 instance ToText TimeBound where
   toText (DateTime ut) = T.pack . show . utcTimeToPOSIXSeconds $ ut
   toText (TxnId ti) = ti
+
+-----------------------------------------------------------------------------
+
+data TradeBalance = TradeBalance
+  { tradebalanceEquivBalance :: Scientific
+  , tradebalanceTradeBalance :: Scientific
+  , tradebalanceMarginOpen :: Scientific
+  , tradebalanceUnrealizedNetPLOpen :: Scientific
+  , tradebalanceCostBasisOpen :: Scientific
+  , tradebalanceFloatingValOpen :: Scientific
+  , tradebalanceEquity :: Scientific
+  , tradebalanceFreeMargin :: Scientific
+  , tradebalanceMarginLevel :: Maybe Scientific
+  } deriving Show
+
+instance FromJSON TradeBalance where
+  parseJSON = parseResult >=> withObject "TradeBalance" (\o -> do
+    tradebalanceEquivBalance <- read <$> o .: "eb"
+    tradebalanceTradeBalance <- read <$> o .: "tb"
+    tradebalanceMarginOpen <- read <$> o .: "m"
+    tradebalanceUnrealizedNetPLOpen <- read <$> o .: "n"
+    tradebalanceCostBasisOpen <- read <$> o .: "c"
+    tradebalanceFloatingValOpen <- read <$> o .: "v"
+    tradebalanceEquity <- read <$> o .: "e"
+    tradebalanceFreeMargin <- read <$> o .: "mf"
+    tradebalanceMarginLevel <- (fmap read) <$> o .:? "ml"
+    return TradeBalance{..})
 
 -----------------------------------------------------------------------------
 

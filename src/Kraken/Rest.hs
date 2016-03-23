@@ -48,7 +48,7 @@ type KrakenAPI             = TimeService
                         :<|> OrderBookService
                         :<|> TradesService
                         :<|> SpreadService
-                        :<|> AccountBalanceService
+                        :<|> BalanceService
                         :<|> TradeBalanceService
                         :<|> OpenOrdersService
                         :<|> ClosedOrdersService
@@ -68,8 +68,8 @@ type OHLCService           = PublicService  "OHLC"          OHLCOptions         
 type OrderBookService      = PublicService  "Depth"         OrderBookOptions     OrderBook
 type TradesService         = PublicService  "Trades"        TradesOptions        Trades
 type SpreadService         = PublicService  "Spread"        SpreadOptions        Spreads
-type AccountBalanceService = PrivateService "Balance"       ()                   Value
-type TradeBalanceService   = PrivateService "TradeBalance"  TradeBalanceOptions  Value
+type BalanceService        = PrivateService "Balance"       ()                   Balance
+type TradeBalanceService   = PrivateService "TradeBalance"  TradeBalanceOptions  TradeBalance
 type OpenOrdersService     = PrivateService "OpenOrders"    OpenOrdersOptions    Value
 type ClosedOrdersService   = PrivateService "ClosedOrders"  ClosedOrdersOptions  Value
 type QueryOrdersService    = PrivateService "QueryOrders"   QueryOrdersOptions   Value
@@ -110,25 +110,25 @@ api = Proxy
 
 -----------------------------------------------------------------------------
 
-time_           :: () -> ServantT Time
-assets_         :: AssetOptions -> ServantT Assets
-assetPairs_     :: AssetPairOptions -> ServantT AssetPairs
-ticker_         :: TickerOptions -> ServantT Ticker
-ohlcs_          :: OHLCOptions -> ServantT OHLCs
-orderBook_      :: OrderBookOptions -> ServantT OrderBook
-trades_         :: TradesOptions -> ServantT Trades
-spreads_        :: SpreadOptions -> ServantT Spreads
-accountBalance_ :: Maybe Text -> Maybe Text -> PrivateRequest () -> ServantT Value
-tradeBalance_   :: Maybe Text -> Maybe Text -> PrivateRequest TradeBalanceOptions -> ServantT Value
-openOrders_     :: Maybe Text -> Maybe Text -> PrivateRequest OpenOrdersOptions -> ServantT Value
-closedOrders_   :: Maybe Text -> Maybe Text -> PrivateRequest ClosedOrdersOptions -> ServantT Value
-queryOrders_    :: Maybe Text -> Maybe Text -> PrivateRequest QueryOrdersOptions -> ServantT Value
-tradesHistory_  :: Maybe Text -> Maybe Text -> PrivateRequest TradesHistoryOptions -> ServantT Value
-queryTrades_    :: Maybe Text -> Maybe Text -> PrivateRequest QueryTradesOptions -> ServantT Value
-openPositions_  :: Maybe Text -> Maybe Text -> PrivateRequest OpenPositionsOptions -> ServantT Value
-ledgers_        :: Maybe Text -> Maybe Text -> PrivateRequest LedgersOptions -> ServantT Value
-queryLedgers_   :: Maybe Text -> Maybe Text -> PrivateRequest QueryLedgersOptions -> ServantT Value
-tradeVolume_    :: Maybe Text -> Maybe Text -> PrivateRequest TradeVolumeOptions -> ServantT Value
+time_          :: () -> ServantT Time
+assets_        :: AssetOptions -> ServantT Assets
+assetPairs_    :: AssetPairOptions -> ServantT AssetPairs
+ticker_        :: TickerOptions -> ServantT Ticker
+ohlcs_         :: OHLCOptions -> ServantT OHLCs
+orderBook_     :: OrderBookOptions -> ServantT OrderBook
+trades_        :: TradesOptions -> ServantT Trades
+spreads_       :: SpreadOptions -> ServantT Spreads
+balance_       :: Maybe Text -> Maybe Text -> PrivateRequest () -> ServantT Balance
+tradeBalance_  :: Maybe Text -> Maybe Text -> PrivateRequest TradeBalanceOptions -> ServantT TradeBalance
+openOrders_    :: Maybe Text -> Maybe Text -> PrivateRequest OpenOrdersOptions -> ServantT Value
+closedOrders_  :: Maybe Text -> Maybe Text -> PrivateRequest ClosedOrdersOptions -> ServantT Value
+queryOrders_   :: Maybe Text -> Maybe Text -> PrivateRequest QueryOrdersOptions -> ServantT Value
+tradesHistory_ :: Maybe Text -> Maybe Text -> PrivateRequest TradesHistoryOptions -> ServantT Value
+queryTrades_   :: Maybe Text -> Maybe Text -> PrivateRequest QueryTradesOptions -> ServantT Value
+openPositions_ :: Maybe Text -> Maybe Text -> PrivateRequest OpenPositionsOptions -> ServantT Value
+ledgers_       :: Maybe Text -> Maybe Text -> PrivateRequest LedgersOptions -> ServantT Value
+queryLedgers_  :: Maybe Text -> Maybe Text -> PrivateRequest QueryLedgersOptions -> ServantT Value
+tradeVolume_   :: Maybe Text -> Maybe Text -> PrivateRequest TradeVolumeOptions -> ServantT Value
 
 time_
   :<|> assets_
@@ -138,7 +138,7 @@ time_
   :<|> orderBook_
   :<|> trades_
   :<|> spreads_
-  :<|> accountBalance_ 
+  :<|> balance_ 
   :<|> tradeBalance_
   :<|> openOrders_
   :<|> closedOrders_
@@ -198,13 +198,13 @@ trades = lift . trades_
 spreads :: SpreadOptions -> KrakenT Spreads
 spreads = lift . spreads_
 
-accountBalance :: KrakenT Value
-accountBalance = privateRequest 
-  (show . safeLink api $ (Proxy :: Proxy AccountBalanceService))
+balance :: KrakenT Balance
+balance = privateRequest 
+  (show . safeLink api $ (Proxy :: Proxy BalanceService))
   ()
-  accountBalance_
+  balance_
 
-tradeBalance :: TradeBalanceOptions -> KrakenT Value
+tradeBalance :: TradeBalanceOptions -> KrakenT TradeBalance
 tradeBalance opts = privateRequest
   (show . safeLink api $ (Proxy :: Proxy TradeBalanceService))
   opts

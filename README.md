@@ -15,8 +15,8 @@ Early stage work in progress.
   * [X] Depth
   * [X] Trades
   * [X] Spread
-  * [ ] Balance
-  * [ ] TradeBalance
+  * [X] Balance
+  * [X] TradeBalance
   * [ ] OpenOrders
   * [ ] ClosedOrders
   * [ ] QueryOrders
@@ -40,3 +40,5 @@ Early stage work in progress.
 * [ ] Add tests
 * [ ] Develop kraken executable into a full command-line tool
 * [ ] Logging
+* [ ] Newtypes for amounts, etc.
+* [ ] Documentation
