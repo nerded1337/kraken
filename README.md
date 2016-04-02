@@ -17,7 +17,7 @@ Early stage work in progress.
   * [X] Spread
   * [X] Balance
   * [X] TradeBalance
-  * [ ] OpenOrders
+  * [X] OpenOrders
   * [ ] ClosedOrders
   * [ ] QueryOrders
   * [ ] TradeHistory
@@ -42,3 +42,4 @@ Early stage work in progress.
 * [ ] Logging
 * [ ] Newtypes for amounts, etc.
 * [ ] Documentation
+* [ ] Items marked with a 'TBC' comment in code

@@ -1,11 +1,13 @@
 module Kraken.Types where
 
+import           Control.Applicative
 import           Control.Arrow
 import           Control.Monad
 import           Data.Aeson
 import           Data.Aeson.Types
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Base64 as B64
+import           Data.Char (toUpper)
 import           Data.Default
 import           Data.Hashable
 import           Data.HashMap.Strict (HashMap)
@@ -20,8 +22,18 @@ import           Data.Time
 import           Data.Time.Clock.POSIX
 import           Data.Vector ((!))
 import           GHC.Generics
+import           Lens.Micro
 import           Servant.API
 import           System.Envy
+
+-----------------------------------------------------------------------------
+
+newtype Amount = Amount { amount :: Scientific } deriving (Show)
+
+instance FromJSON Amount where parseJSON = fmap Amount . parseScientific
+
+maybeAmount :: Amount -> Maybe Amount
+maybeAmount a@(Amount s) = if (s == 0) then Nothing else (Just a)
 
 -----------------------------------------------------------------------------
 
@@ -123,7 +135,7 @@ data AssetPairInfo = AssetPairInfo
   , assetpairinfoBaseAsset :: Asset
   , assetpairinfoQuoteAssetClass :: AssetClass
   , assetpairinfoQuoteAsset :: Asset
-  , assetpairinfoLot :: String -- TBC: enum
+  , assetpairinfoLot :: String -- TBC
   , assetpairinfoPairDecimals :: Int
   , assetpairinfoLotDecimals :: Int
   , assetpairinfoLotMultiplier :: Int
@@ -393,9 +405,67 @@ instance FromJSON OHLCs where
 
 -----------------------------------------------------------------------------
 
+data OpenOrderInfo = OpenOrderInfo
+  { openorderinfoRefTxnId :: Maybe TxnId
+  , openorderinfoUserRef :: Maybe UserRef
+  , openorderinfoStatus :: OrderStatus
+  , openorderinfoOpenTime :: Timestamp
+  , openorderinfoStartTime :: Maybe Timestamp 
+  , openorderinfoExpireTime :: Maybe Timestamp
+  , openorderinfoDescription :: OrderDescription
+  , openorderinfoVol :: Volume
+  , openorderinfoVolExecuted :: Volume
+  , openorderinfoCost :: Amount
+  , openorderinfoFee :: Amount
+  , openorderinfoAveragePrice :: Price
+  , openorderinfoStopPrice :: Maybe Price
+  , openorderinfoLimitPrice :: Maybe Price
+  , openorderinfoMisc :: Text -- TBC
+  , openorderinfoFlags :: Text -- TBC
+  , openorderinfoTrades :: Maybe [TxnId]
+  } deriving Show
+
+parseMaybeNull :: FromJSON a => Value -> Parser (Maybe a)
+parseMaybeNull Null = return Nothing
+parseMaybeNull v = parseJSON v
+
+instance FromJSON OpenOrderInfo where
+  parseJSON = withObject "OpenOrderInfo" $ \o -> OpenOrderInfo
+    <$> (o .: "refid" >>= parseMaybeNull)
+    <*> (o .: "userref" >>= parseMaybeNull)
+    <*> o .:  "status"
+    <*> o .:  "opentm"
+    <*> fmap maybeTimestamp (o .:  "starttm")
+    <*> fmap maybeTimestamp (o .:  "expiretm")
+    <*> o .:  "descr"
+    <*> o .:  "vol"
+    <*> o .:  "vol_exec"
+    <*> o .:  "cost"
+    <*> o .:  "fee"
+    <*> o .:  "price"
+    <*> o .:? "stopprice"
+    <*> o .:? "limitprice"
+    <*> o .:  "misc"
+    <*> o .:  "oflags"
+    <*> o .:?  "trades"
+
+-----------------------------------------------------------------------------
+
+data OpenOrders = OpenOrders
+  { unOpenOrders :: HashMap TxnId OpenOrderInfo
+  } deriving Show
+
+instance FromJSON OpenOrders where
+  parseJSON = parseResult
+    >=> withObject "OpenOrders" (\o -> o .: "open")
+    >=> parseJSON
+    >=> return . OpenOrders . H.fromList . map (first TxnId) . H.toList
+
+-----------------------------------------------------------------------------
+
 data OpenOrdersOptions = OpenOrdersOptions
-  { openordersIncludeTrades :: Bool
-  , openordersUserRef :: Maybe Text
+  { openordersoptionsIncludeTrades :: Bool
+  , openordersoptionsUserRef :: Maybe Text
   } deriving Show
 
 instance Default OpenOrdersOptions where
@@ -403,9 +473,9 @@ instance Default OpenOrdersOptions where
 
 instance ToFormUrlEncoded OpenOrdersOptions where
   toFormUrlEncoded OpenOrdersOptions{..} =
-    [ ("trades",T.toLower . toText . show $ openordersIncludeTrades ) ]
+    [ ("trades",T.toLower . toText . show $ openordersoptionsIncludeTrades ) ]
     ++
-    [ ("userref",toText r) | Just r <- [openordersUserRef] ]
+    [ ("userref",toText r) | Just r <- [openordersoptionsUserRef] ]
 
 -----------------------------------------------------------------------------
 
@@ -422,6 +492,22 @@ instance ToFormUrlEncoded OpenPositionsOptions where
     [ ("txid", T.intercalate "," openpositionsTxnIds )
     , ("docalcs",T.toLower . toText . show $ openpositionsIncludePL )
     ]
+
+-----------------------------------------------------------------------------
+
+data OrderBook = OrderBook
+  { orderbookPair :: AssetPair
+  , orderbookBids :: [OrderBookEntry]
+  , orderbookAsks :: [OrderBookEntry]
+  } deriving Show
+
+instance FromJSON OrderBook where
+  parseJSON = parseResult >=> parseJSON >=> withObject "OrderBook" (\o -> do
+    let p = head $ H.keys o
+    ob <- o .: p
+    bs <- ob .: "bids"
+    as <- ob .: "asks"
+    return $ OrderBook (read $ T.unpack p) bs as)
 
 -----------------------------------------------------------------------------
 
@@ -455,47 +541,101 @@ instance ToFormUrlEncoded OrderBookOptions where
 
 -----------------------------------------------------------------------------
 
-data OrderBook = OrderBook
-  { orderbookPair :: AssetPair
-  , orderbookBids :: [OrderBookEntry]
-  , orderbookAsks :: [OrderBookEntry]
+data OrderDescription = OrderDescription
+  { orderdescPair :: Text -- TBC
+  , orderdescDir :: OrderDir
+  , orderdescType :: OrderType
+  , orderdescPrimaryPrice :: Price
+  , orderdescSecondaryPrice :: Maybe Price
+  , orderdescLeverage :: Text -- TBC
+  , orderdescDescription :: Text
+  , orderdescClose :: Maybe Text
   } deriving Show
 
-instance FromJSON OrderBook where
-  parseJSON = parseResult >=> parseJSON >=> withObject "OrderBook" (\o -> do
-    let p = head $ H.keys o
-    ob <- o .: p
-    bs <- ob .: "bids"
-    as <- ob .: "asks"
-    return $ OrderBook (read $ T.unpack p) bs as)
+instance FromJSON OrderDescription where
+  parseJSON = withObject "OrderDescription" $ \o -> OrderDescription
+    <$> o .:  "pair"
+    <*> o .:  "type"
+    <*> o .:  "ordertype"
+    <*> o .:  "price"
+    <*> fmap maybePrice (o .:  "price2")
+    <*> o .:  "leverage"
+    <*> o .:  "order"
+    <*> o .:? "close"
 
 -----------------------------------------------------------------------------
 
 data OrderDir =
-    Buy
-  | Sell
+    OrderDir'Buy
+  | OrderDir'Sell
     deriving Show
 
 instance FromJSON OrderDir where
-  parseJSON (String "b") = return Buy
-  parseJSON (String "s") = return Sell
-  parseJSON _            = mzero
+  parseJSON = withText "OrderDir" $ \case
+    "b"    -> return OrderDir'Buy
+    "buy"  -> return OrderDir'Buy
+    "s"    -> return OrderDir'Sell
+    "sell" -> return OrderDir'Sell
+    _      -> mzero
 
 -----------------------------------------------------------------------------
 
-data OrderType = 
-    Market
-  | Limit
+data OrderStatus = 
+    OrderStatus'Pending
+  | OrderStatus'Open
+  | OrderStatus'Closed
+  | OrderStatus'Canceled
+  | OrderStatus'Expired
+    deriving (Enum,Eq,Ord,Read,Show)
+
+instance FromJSON OrderStatus where
+  parseJSON = withText "OrderStatus" $ return . read . ("OrderStatus'" ++) . over _head toUpper . T.unpack
+
+-----------------------------------------------------------------------------
+
+data OrderType =
+    OrderType'Limit
+  | OrderType'Market
+  | OrderType'StopLoss
+  | OrderType'StopLossAndLimit
+  | OrderType'StopLossLimit
+  | OrderType'StopLossProfit
+  | OrderType'StopLossProfitLimit
+  | OrderType'TakeProfit
+  | OrderType'TakeProfitLimit
+  | OrderType'TrailingStop
+  | OrderType'TrailingStopLimit
     deriving Show
 
 instance FromJSON OrderType where
-  parseJSON (String "m") = return Market
-  parseJSON (String "l") = return Limit
-  parseJSON _            = mzero
+  parseJSON = withText "OrderType" $ \case
+    "l"                      -> return OrderType'Limit
+    "limit"                  -> return OrderType'Limit
+    "m"                      -> return OrderType'Market
+    "market"                 -> return OrderType'Market
+    "stop-loss"              -> return OrderType'StopLoss
+    "stop-loss-and-limit"    -> return OrderType'StopLossAndLimit
+    "stop-loss-limit"        -> return OrderType'StopLossLimit
+    "stop-loss-profit"       -> return OrderType'StopLossProfit
+    "stop-loss-profit-limit" -> return OrderType'StopLossProfitLimit
+    "take-profit"            -> return OrderType'TakeProfit
+    "take-profit-limit"      -> return OrderType'TakeProfitLimit
+    "trailing-stop"          -> return OrderType'TrailingStop
+    "trailing-stop-limit"    -> return OrderType'TrailingStopLimit
+    _                        -> mzero
 
 -----------------------------------------------------------------------------
 
 type Port = Int
+
+-----------------------------------------------------------------------------
+
+newtype Price = Price { price :: Scientific } deriving (Show)
+
+instance FromJSON Price where parseJSON = fmap Price . parseScientific
+
+maybePrice :: Price -> Maybe Price
+maybePrice p@(Price s) = if (s == 0) then Nothing else (Just p)
 
 -----------------------------------------------------------------------------
 
@@ -680,13 +820,23 @@ instance FromJSON Time where
 -----------------------------------------------------------------------------
 
 data TimeBound =
-    DateTime UTCTime
-  | TxnId Text
+    TimeBound'DateTime UTCTime
+  | TimeBound'TxnId Text
     deriving Show
 
 instance ToText TimeBound where
-  toText (DateTime ut) = T.pack . show . utcTimeToPOSIXSeconds $ ut
-  toText (TxnId ti) = ti
+  toText (TimeBound'DateTime ut) = T.pack . show . utcTimeToPOSIXSeconds $ ut
+  toText (TimeBound'TxnId ti) = ti
+
+-----------------------------------------------------------------------------
+
+newtype Timestamp = Timestamp { timestamp :: UTCTime } deriving (Show)
+
+instance FromJSON Timestamp where
+  parseJSON = withScientific "Timestamp" $ return . Timestamp . posixSecondsToUTCTime . fromRational . toRational
+
+maybeTimestamp :: Timestamp -> Maybe Timestamp
+maybeTimestamp ts@(Timestamp t) = if (t == posixSecondsToUTCTime 0) then Nothing else (Just ts)
 
 -----------------------------------------------------------------------------
 
@@ -848,6 +998,20 @@ instance ToFormUrlEncoded TradeVolumeOptions where
 
 -----------------------------------------------------------------------------
 
+newtype TxnId = TxnId { txnId :: Text} deriving (Eq,FromJSON,Generic,Hashable,Show)
+
+-----------------------------------------------------------------------------
+
+newtype UserRef = UserRef { userRef :: Text} deriving (FromJSON,Generic,Hashable,Show)
+
+-----------------------------------------------------------------------------
+
+newtype Volume = Volume { volume :: Scientific } deriving (Show)
+
+instance FromJSON Volume where parseJSON = fmap Volume . parseScientific
+
+-----------------------------------------------------------------------------
+
 instance ToFormUrlEncoded () where
   toFormUrlEncoded () = []
 
@@ -859,3 +1023,9 @@ parseResult = withObject "result" $ \o -> do
   case e of
     [] -> o .: "result"
     _  -> (fail . concat . map show) e
+
+parseScientific :: Value -> Parser Scientific
+parseScientific v = 
+  withText "Scientific" (return . read . T.unpack) v
+  <|>
+  parseJSON v
