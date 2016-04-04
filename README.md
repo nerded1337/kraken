@@ -39,6 +39,7 @@ Early stage work in progress.
 * [ ] Restrict OHLC bar intervals
 * [ ] Handle 'since' / 'last' - JSON can be number or string
 * [ ] Add tests
+* [ ] Add benchmarks
 * [ ] Develop kraken executable into a full command-line tool
 * [ ] Logging
 * [ ] Newtypes for amounts, etc.

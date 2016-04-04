@@ -18,6 +18,7 @@ library
   ghc-options:         -Wall -fno-warn-orphans
   hs-source-dirs:      src
   exposed-modules:     Kraken.API
+                     , Kraken.Parse
                      , Kraken.Rest
                      , Kraken.Types
                      , Kraken.Util

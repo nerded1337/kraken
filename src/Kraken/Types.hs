@@ -1,6 +1,5 @@
 module Kraken.Types where
 
-import           Control.Applicative
 import           Control.Arrow
 import           Control.Monad
 import           Data.Aeson
@@ -11,7 +10,7 @@ import           Data.Char (toUpper)
 import           Data.Default
 import           Data.Hashable
 import           Data.HashMap.Strict (HashMap)
-import qualified Data.HashMap.Strict as H (delete,empty,filter,fromList,keys,map,toList)
+import qualified Data.HashMap.Strict as H (delete,filter,fromList,keys,map,toList)
 import           Data.Maybe
 import           Data.Ratio
 import           Data.Scientific
@@ -25,6 +24,8 @@ import           GHC.Generics
 import           Lens.Micro
 import           Servant.API
 import           System.Envy
+
+import           Kraken.Parse
 
 -----------------------------------------------------------------------------
 
@@ -1041,25 +1042,3 @@ instance FromJSON Volume where parseJSON = fmap Volume . parseScientific
 instance ToFormUrlEncoded () where
   toFormUrlEncoded () = []
 
------------------------------------------------------------------------------
-
-parseMaybeNull :: FromJSON a => Value -> Parser (Maybe a)
-parseMaybeNull Null = return Nothing
-parseMaybeNull v = parseJSON v
-
-parseMaybeJustNull :: FromJSON a => Maybe Value -> Parser (Maybe a)
-parseMaybeJustNull (Just v) = fmap Just (parseJSON v)
-parseMaybeJustNull _        = return Nothing
-
-parseResult :: FromJSON a => Value -> Parser a
-parseResult = withObject "result" $ \o -> do
-  (e :: [String]) <- o .: "error"
-  case e of
-    [] -> o .: "result"
-    _  -> (fail . concat . map show) e
-
-parseScientific :: Value -> Parser Scientific
-parseScientific v = 
-  withText "Scientific" (return . read . T.unpack) v
-  <|>
-  parseJSON v
