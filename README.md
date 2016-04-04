@@ -26,6 +26,8 @@ Early stage work in progress.
   * [ ] Ledgers
   * [ ] QueryLedgers
   * [ ] TradeVolume
+  * [ ] AddOrder
+  * [ ] CancelOrder
 * [ ] Add 'options' to field names for Options data types
 * [ ] Add underscore prefix to field names (for lens derivation)
 * [ ] Resolve duplication in private user data functions (first attempt failed due to difficulty in factoring out Proxy's)
@@ -34,7 +36,6 @@ Early stage work in progress.
 * [ ] Enforce non-empty lists for relevant requests (e.g. query trades?)
 * [ ] Prefix enums with enum name
 * [ ] Untyped requests
-* [ ] Private trading services
 * [ ] Restrict OHLC bar intervals
 * [ ] Handle 'since' / 'last' - JSON can be number or string
 * [ ] Add tests
