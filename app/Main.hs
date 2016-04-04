@@ -25,16 +25,16 @@ run cfg = void $ runKraken cfg $ do
   -- io =<< trades         (TradesOptions xbtusd Nothing)
   -- io =<< spreads        (SpreadOptions xbtusd Nothing)
   -- io =<< balance
-  io =<< tradeBalance   def
+  -- io =<< tradeBalance   def
   io =<< openOrders     (OpenOrdersOptions True Nothing)
-  -- io =<< closedOrders   def
+  io =<< closedOrders   def
   -- io =<< queryOrders    (QueryOrdersOptions False Nothing ["123"]) 
   -- io =<< tradesHistory  def
   -- io =<< queryTrades    (QueryTradesOptions ["123"] True)
   -- io =<< openPositions  (OpenPositionsOptions ["123"] False)
   -- io =<< ledgers        def
   -- io =<< queryLedgers   (QueryLedgersOptions ["123","321"])
-  io =<< tradeVolume    (TradeVolumeOptions pairs)
+  -- io =<< tradeVolume    (TradeVolumeOptions pairs)
 
  where
 

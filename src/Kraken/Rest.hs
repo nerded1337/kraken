@@ -71,7 +71,7 @@ type SpreadService         = PublicService  "Spread"        SpreadOptions       
 type BalanceService        = PrivateService "Balance"       ()                   Balance
 type TradeBalanceService   = PrivateService "TradeBalance"  TradeBalanceOptions  TradeBalance
 type OpenOrdersService     = PrivateService "OpenOrders"    OpenOrdersOptions    OpenOrders
-type ClosedOrdersService   = PrivateService "ClosedOrders"  ClosedOrdersOptions  Value
+type ClosedOrdersService   = PrivateService "ClosedOrders"  ClosedOrdersOptions  ClosedOrders
 type QueryOrdersService    = PrivateService "QueryOrders"   QueryOrdersOptions   Value
 type TradesHistoryService  = PrivateService "TradeHistory"  TradesHistoryOptions Value
 type QueryTradesService    = PrivateService "QueryTrades"   QueryTradesOptions   Value
@@ -121,7 +121,7 @@ spreads_       :: SpreadOptions -> ServantT Spreads
 balance_       :: Maybe Text -> Maybe Text -> PrivateRequest () -> ServantT Balance
 tradeBalance_  :: Maybe Text -> Maybe Text -> PrivateRequest TradeBalanceOptions -> ServantT TradeBalance
 openOrders_    :: Maybe Text -> Maybe Text -> PrivateRequest OpenOrdersOptions -> ServantT OpenOrders
-closedOrders_  :: Maybe Text -> Maybe Text -> PrivateRequest ClosedOrdersOptions -> ServantT Value
+closedOrders_  :: Maybe Text -> Maybe Text -> PrivateRequest ClosedOrdersOptions -> ServantT ClosedOrders
 queryOrders_   :: Maybe Text -> Maybe Text -> PrivateRequest QueryOrdersOptions -> ServantT Value
 tradesHistory_ :: Maybe Text -> Maybe Text -> PrivateRequest TradesHistoryOptions -> ServantT Value
 queryTrades_   :: Maybe Text -> Maybe Text -> PrivateRequest QueryTradesOptions -> ServantT Value
@@ -216,7 +216,7 @@ openOrders opts = privateRequest
   opts
   openOrders_
 
-closedOrders :: ClosedOrdersOptions -> KrakenT Value
+closedOrders :: ClosedOrdersOptions -> KrakenT ClosedOrders
 closedOrders opts = privateRequest
   (show . safeLink api $ (Proxy :: Proxy ClosedOrdersService))
   opts
