@@ -681,6 +681,16 @@ instance ToFormUrlEncoded QueryLedgersOptions where
 
 -----------------------------------------------------------------------------
 
+data QueryOrders = QueryOrders
+  { unQueryOrders :: HashMap TxnId OrderInfo
+  } deriving Show
+
+instance FromJSON QueryOrders where
+  parseJSON = parseResult >=> parseJSON
+    >=> return . QueryOrders . H.fromList . map (first TxnId) . H.toList
+
+-----------------------------------------------------------------------------
+
 data QueryOrdersOptions = QueryOrdersOptions
   { queryordersIncludeTrades :: Bool
   , queryordersUserRef :: Maybe Text

@@ -19,7 +19,7 @@ Early stage work in progress.
   * [X] TradeBalance
   * [X] OpenOrders
   * [X] ClosedOrders
-  * [ ] QueryOrders
+  * [X] QueryOrders
   * [ ] TradeHistory
   * [ ] QueryTrades
   * [ ] OpenPosition

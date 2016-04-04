@@ -72,7 +72,7 @@ type BalanceService        = PrivateService "Balance"       ()                  
 type TradeBalanceService   = PrivateService "TradeBalance"  TradeBalanceOptions  TradeBalance
 type OpenOrdersService     = PrivateService "OpenOrders"    OpenOrdersOptions    OpenOrders
 type ClosedOrdersService   = PrivateService "ClosedOrders"  ClosedOrdersOptions  ClosedOrders
-type QueryOrdersService    = PrivateService "QueryOrders"   QueryOrdersOptions   Value
+type QueryOrdersService    = PrivateService "QueryOrders"   QueryOrdersOptions   QueryOrders
 type TradesHistoryService  = PrivateService "TradeHistory"  TradesHistoryOptions Value
 type QueryTradesService    = PrivateService "QueryTrades"   QueryTradesOptions   Value
 type OpenPositionsService  = PrivateService "OpenPositions" OpenPositionsOptions Value
@@ -122,7 +122,7 @@ balance_       :: Maybe Text -> Maybe Text -> PrivateRequest () -> ServantT Bala
 tradeBalance_  :: Maybe Text -> Maybe Text -> PrivateRequest TradeBalanceOptions -> ServantT TradeBalance
 openOrders_    :: Maybe Text -> Maybe Text -> PrivateRequest OpenOrdersOptions -> ServantT OpenOrders
 closedOrders_  :: Maybe Text -> Maybe Text -> PrivateRequest ClosedOrdersOptions -> ServantT ClosedOrders
-queryOrders_   :: Maybe Text -> Maybe Text -> PrivateRequest QueryOrdersOptions -> ServantT Value
+queryOrders_   :: Maybe Text -> Maybe Text -> PrivateRequest QueryOrdersOptions -> ServantT QueryOrders
 tradesHistory_ :: Maybe Text -> Maybe Text -> PrivateRequest TradesHistoryOptions -> ServantT Value
 queryTrades_   :: Maybe Text -> Maybe Text -> PrivateRequest QueryTradesOptions -> ServantT Value
 openPositions_ :: Maybe Text -> Maybe Text -> PrivateRequest OpenPositionsOptions -> ServantT Value
@@ -222,7 +222,7 @@ closedOrders opts = privateRequest
   opts
   closedOrders_
 
-queryOrders :: QueryOrdersOptions -> KrakenT Value
+queryOrders :: QueryOrdersOptions -> KrakenT QueryOrders
 queryOrders opts = privateRequest
   (show . safeLink api $ (Proxy :: Proxy QueryOrdersService))
   opts
