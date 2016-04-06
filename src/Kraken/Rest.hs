@@ -73,7 +73,7 @@ type TradeBalanceService   = PrivateService "TradeBalance"  TradeBalanceOptions 
 type OpenOrdersService     = PrivateService "OpenOrders"    OpenOrdersOptions    OpenOrders
 type ClosedOrdersService   = PrivateService "ClosedOrders"  ClosedOrdersOptions  ClosedOrders
 type QueryOrdersService    = PrivateService "QueryOrders"   QueryOrdersOptions   QueryOrders
-type TradesHistoryService  = PrivateService "TradeHistory"  TradesHistoryOptions Value
+type TradesHistoryService  = PrivateService "TradesHistory" TradesHistoryOptions TradesHistory
 type QueryTradesService    = PrivateService "QueryTrades"   QueryTradesOptions   Value
 type OpenPositionsService  = PrivateService "OpenPositions" OpenPositionsOptions Value
 type LedgersService        = PrivateService "Ledgers"       LedgersOptions       Value
@@ -123,7 +123,7 @@ tradeBalance_  :: Maybe Text -> Maybe Text -> PrivateRequest TradeBalanceOptions
 openOrders_    :: Maybe Text -> Maybe Text -> PrivateRequest OpenOrdersOptions -> ServantT OpenOrders
 closedOrders_  :: Maybe Text -> Maybe Text -> PrivateRequest ClosedOrdersOptions -> ServantT ClosedOrders
 queryOrders_   :: Maybe Text -> Maybe Text -> PrivateRequest QueryOrdersOptions -> ServantT QueryOrders
-tradesHistory_ :: Maybe Text -> Maybe Text -> PrivateRequest TradesHistoryOptions -> ServantT Value
+tradesHistory_ :: Maybe Text -> Maybe Text -> PrivateRequest TradesHistoryOptions -> ServantT TradesHistory
 queryTrades_   :: Maybe Text -> Maybe Text -> PrivateRequest QueryTradesOptions -> ServantT Value
 openPositions_ :: Maybe Text -> Maybe Text -> PrivateRequest OpenPositionsOptions -> ServantT Value
 ledgers_       :: Maybe Text -> Maybe Text -> PrivateRequest LedgersOptions -> ServantT Value
@@ -228,7 +228,7 @@ queryOrders opts = privateRequest
   opts
   queryOrders_
 
-tradesHistory :: TradesHistoryOptions -> KrakenT Value
+tradesHistory :: TradesHistoryOptions -> KrakenT TradesHistory
 tradesHistory opts = privateRequest
   (show . safeLink api $ (Proxy :: Proxy TradesHistoryService))
   opts

@@ -20,7 +20,7 @@ Early stage work in progress.
   * [X] OpenOrders
   * [X] ClosedOrders
   * [X] QueryOrders
-  * [ ] TradeHistory
+  * [X] TradeHistory
   * [ ] QueryTrades
   * [ ] OpenPosition
   * [ ] Ledgers
@@ -45,3 +45,4 @@ Early stage work in progress.
 * [ ] Newtypes for amounts, etc.
 * [ ] Documentation
 * [ ] Items marked with a 'TBC' comment in code
+* [ ] Test optional PositionInfo on TradeHistory

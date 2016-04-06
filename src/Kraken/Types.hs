@@ -644,6 +644,40 @@ type Port = Int
 
 -----------------------------------------------------------------------------
 
+data PositionInfo = PositionInfo
+  { positioninfoStatus :: PositionStatus
+  , positioninfoClosedPrice :: Price
+  , positioninfoClosedCost :: Amount
+  , positioninfoClosedFee :: Amount
+  , positioninfoClosedVol :: Amount
+  , positioninfoClosedMargin :: Amount
+  , positioninfoClosedNetPL :: Amount
+  , positioninfoClosedTrades :: [Value]  -- TBC
+  } deriving Show
+
+
+instance FromJSON PositionInfo where
+  parseJSON = withObject "PositionInfo" $ \o -> PositionInfo
+    <$> o .: "posstatus"
+    <*> o .: "cprice"
+    <*> o .: "ccost"
+    <*> o .: "cfee"
+    <*> o .: "cvol"
+    <*> o .: "cmargin"
+    <*> o .: "net"
+    <*> o .: "trades"
+-----------------------------------------------------------------------------
+
+data PositionStatus = 
+    PositionStatus'Open
+  | PositionStatus'Closed
+    deriving (Enum,Eq,Ord,Read,Show)
+
+instance FromJSON PositionStatus where
+  parseJSON = withText "PositionStatus" $ return . read . ("PositionStatus'" ++) . over _head toUpper . T.unpack
+
+-----------------------------------------------------------------------------
+
 newtype Price = Price { price :: Scientific } deriving (Show)
 
 instance FromJSON Price where parseJSON = fmap Price . parseScientific
@@ -907,6 +941,42 @@ instance ToFormUrlEncoded TradeBalanceOptions where
 
 -----------------------------------------------------------------------------
 
+data TradeHistoryInfo = TradeHistoryInfo
+  { tradehistoryinfoTxnId :: TxnId
+  , tradehistoryinfoPair :: AssetPair
+  , tradehistoryinfoTime :: Timestamp
+  , tradehistoryinfoDir :: OrderDir
+  , tradehistoryinfoType :: OrderType
+  , tradehistoryinfoPrice :: Price
+  , tradehistoryinfoCost :: Amount
+  , tradehistoryinfoFee :: Amount
+  , tradehistoryinfoVol :: Volume
+  , tradehistoryinfoInitialMargin :: Amount
+  , tradehistoryinfoMisc :: Text -- TBC
+  , tradehistoryinfoClosing :: Maybe Value -- TBC
+  , tradehistoryinfoPosition :: Maybe PositionInfo
+  } deriving Show
+
+instance FromJSON TradeHistoryInfo where
+  parseJSON v = v & withObject "TradeHistoryInfo" (\o -> TradeHistoryInfo
+    <$> o .:  "ordertxid"
+    <*> o .:  "pair"
+    <*> o .:  "time"
+    <*> o .:  "type"
+    <*> o .:  "ordertype"
+    <*> o .:  "price"
+    <*> o .:  "cost"
+    <*> o .:  "fee"
+    <*> o .:  "vol"
+    <*> o .:  "margin"
+    <*> o .:  "misc"
+    <*> o .:? "closing"
+    <*> (o .:? "posstatus" >>= \case
+          Nothing                    -> return Nothing
+          Just (_ :: PositionStatus) -> fmap Just (parseJSON v)))
+
+-----------------------------------------------------------------------------
+
 data TradeInfo = TradeInfo
   { tradeinfoPrice :: Scientific
   , tradeinfoVol :: Scientific
@@ -943,12 +1013,25 @@ instance FromJSON Trades where
 
 -----------------------------------------------------------------------------
 
+data TradesHistory = TradesHistory
+  { tradeshistoryTrades :: HashMap TxnId TradeHistoryInfo
+  , tradeshistoryCount :: Int
+  } deriving Show
+
+instance FromJSON TradesHistory where
+  parseJSON = parseResult >=> withObject "TradesHistory" (\o -> do
+    tradeshistoryTrades <- o .: "trades" >>= parseJSON >>= return . H.fromList . map (first TxnId) . H.toList
+    tradeshistoryCount   <- o .: "count"      
+    return TradesHistory{..})
+
+-----------------------------------------------------------------------------
+
 data TradesHistoryOptions = TradesHistoryOptions
-  { tradeshistoryType :: Maybe TradeType
-  , tradeshistoryIncludeTrades :: Bool
-  , tradeshistoryStart :: Maybe TimeBound
-  , tradeshistoryEnd  :: Maybe TimeBound
-  , tradeshistoryOffset  :: Maybe Int
+  { tradeshistoryoptionsType :: Maybe TradeType
+  , tradeshistoryoptionsIncludeTrades :: Bool
+  , tradeshistoryoptionsStart :: Maybe TimeBound
+  , tradeshistoryoptionsEnd  :: Maybe TimeBound
+  , tradeshistoryoptionsOffset  :: Maybe Int
   } deriving Show
 
 instance Default TradesHistoryOptions where
@@ -956,15 +1039,15 @@ instance Default TradesHistoryOptions where
 
 instance ToFormUrlEncoded TradesHistoryOptions where
   toFormUrlEncoded TradesHistoryOptions{..} =
-    [ ("type",toText t) | Just t <- [tradeshistoryType] ]
+    [ ("type",toText t) | Just t <- [tradeshistoryoptionsType] ]
     ++
-    [ ("trades",T.toLower . toText . show $ tradeshistoryIncludeTrades ) ]
+    [ ("trades",T.toLower . toText . show $ tradeshistoryoptionsIncludeTrades ) ]
     ++
-    [("start",toText start) | Just start <- [tradeshistoryStart] ]
+    [("start",toText start) | Just start <- [tradeshistoryoptionsStart] ]
     ++
-    [("end",toText end) | Just end <- [tradeshistoryEnd] ]
+    [("end",toText end) | Just end <- [tradeshistoryoptionsEnd] ]
     ++
-    [ ("ofs",T.pack . show $ ofs) | Just ofs <- [tradeshistoryOffset] ]
+    [ ("ofs",T.pack . show $ ofs) | Just ofs <- [tradeshistoryoptionsOffset] ]
 
 -----------------------------------------------------------------------------
 
