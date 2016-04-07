@@ -120,6 +120,9 @@ instance Read AssetPair where
                                      return (AssetPair b q,qr)
                 | otherwise     = []
 
+instance FromJSON AssetPair where
+  parseJSON = withText "AssetPair" (return . read . T.unpack)
+
 instance Default AssetPair where
   def = AssetPair XXBT ZUSD
 
@@ -742,6 +745,15 @@ instance ToFormUrlEncoded QueryOrdersOptions where
     [ ("userref",toText r) | Just r <- [queryordersUserRef] ]
     ++
     [ ("txid", T.intercalate "," queryordersTxnIds ) ]
+
+-----------------------------------------------------------------------------
+
+data QueryTrades = QueryTrades
+  { querytradesTrades :: HashMap TxnId TradeHistoryInfo
+  } deriving Show
+
+instance FromJSON QueryTrades where
+  parseJSON = parseResult >=> parseJSON >=> return . QueryTrades . H.fromList . map (first TxnId) . H.toList
 
 -----------------------------------------------------------------------------
 

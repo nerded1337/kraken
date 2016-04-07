@@ -74,7 +74,7 @@ type OpenOrdersService     = PrivateService "OpenOrders"    OpenOrdersOptions   
 type ClosedOrdersService   = PrivateService "ClosedOrders"  ClosedOrdersOptions  ClosedOrders
 type QueryOrdersService    = PrivateService "QueryOrders"   QueryOrdersOptions   QueryOrders
 type TradesHistoryService  = PrivateService "TradesHistory" TradesHistoryOptions TradesHistory
-type QueryTradesService    = PrivateService "QueryTrades"   QueryTradesOptions   Value
+type QueryTradesService    = PrivateService "QueryTrades"   QueryTradesOptions   QueryTrades
 type OpenPositionsService  = PrivateService "OpenPositions" OpenPositionsOptions Value
 type LedgersService        = PrivateService "Ledgers"       LedgersOptions       Value
 type QueryLedgersService   = PrivateService "QueryLedgers"  QueryLedgersOptions  Value
@@ -124,7 +124,7 @@ openOrders_    :: Maybe Text -> Maybe Text -> PrivateRequest OpenOrdersOptions -
 closedOrders_  :: Maybe Text -> Maybe Text -> PrivateRequest ClosedOrdersOptions -> ServantT ClosedOrders
 queryOrders_   :: Maybe Text -> Maybe Text -> PrivateRequest QueryOrdersOptions -> ServantT QueryOrders
 tradesHistory_ :: Maybe Text -> Maybe Text -> PrivateRequest TradesHistoryOptions -> ServantT TradesHistory
-queryTrades_   :: Maybe Text -> Maybe Text -> PrivateRequest QueryTradesOptions -> ServantT Value
+queryTrades_   :: Maybe Text -> Maybe Text -> PrivateRequest QueryTradesOptions -> ServantT QueryTrades
 openPositions_ :: Maybe Text -> Maybe Text -> PrivateRequest OpenPositionsOptions -> ServantT Value
 ledgers_       :: Maybe Text -> Maybe Text -> PrivateRequest LedgersOptions -> ServantT Value
 queryLedgers_  :: Maybe Text -> Maybe Text -> PrivateRequest QueryLedgersOptions -> ServantT Value
@@ -234,7 +234,7 @@ tradesHistory opts = privateRequest
   opts
   tradesHistory_
 
-queryTrades :: QueryTradesOptions -> KrakenT Value
+queryTrades :: QueryTradesOptions -> KrakenT QueryTrades
 queryTrades opts = privateRequest
   (show . safeLink api $ (Proxy :: Proxy QueryTradesService))
   opts
