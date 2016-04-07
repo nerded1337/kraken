@@ -21,7 +21,7 @@ Early stage work in progress.
   * [X] ClosedOrders
   * [X] QueryOrders
   * [X] TradeHistory
-  * [ ] QueryTrades
+  * [X] QueryTrades
   * [ ] OpenPosition
   * [ ] Ledgers
   * [ ] QueryLedgers
@@ -46,3 +46,4 @@ Early stage work in progress.
 * [ ] Documentation
 * [ ] Items marked with a 'TBC' comment in code
 * [ ] Test optional PositionInfo on TradeHistory
+* [ ] TxnId -> RefId

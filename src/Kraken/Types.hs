@@ -319,6 +319,43 @@ type Host = String
 
 -----------------------------------------------------------------------------
 
+data LedgerInfo = LedgerInfo
+  { ledgerinfoRefId :: RefId
+  , ledgerinfoTime :: Timestamp
+  , ledgerinfoType :: LedgerType
+  , ledgerinfoAclass :: AssetClass
+  , ledgerinfoAsset :: Asset
+  , ledgerinfoAmount :: Amount
+  , ledgerinfoFee :: Amount
+  , ledgerinfoBalance :: Amount
+  } deriving Show
+
+instance FromJSON LedgerInfo where
+  parseJSON = withObject "LedgerInfo" $ \o -> LedgerInfo
+    <$> o .: "refid"
+    <*> o .: "time"
+    <*> o .: "type"
+    <*> o .: "aclass"
+    <*> o .: "asset"
+    <*> o .: "amount"
+    <*> o .: "fee"
+    <*> o .: "balance"
+
+-----------------------------------------------------------------------------
+
+data Ledgers = Ledgers
+  { ledgersCount :: Int
+  , ledgersLedgers :: HashMap RefId LedgerInfo
+  } deriving Show
+
+instance FromJSON Ledgers where
+  parseJSON = parseResult >=> withObject "Ledgers" (\o -> do
+    ledgersCount   <- o .: "count"
+    ledgersLedgers <- o .: "ledger" >>= parseJSON >>= return . H.fromList . map (first RefId) . H.toList
+    return Ledgers{..})
+
+-----------------------------------------------------------------------------
+
 data LedgersOptions = LedgersOptions
   { ledgersAssetClass :: AssetClass
   , ledgersAssets :: [Asset]
@@ -348,19 +385,21 @@ instance ToFormUrlEncoded LedgersOptions where
 -----------------------------------------------------------------------------
 
 data LedgerType =
-    AllLedgerTypes
-  | Deposit
-  | Withdrawal
-  | Trade
-  | Margin
-    deriving (Enum,Eq,Ord,Show)
+    LedgerType'All
+  | LedgerType'Deposit
+  | LedgerType'Withdrawal
+  | LedgerType'Trade
+  | LedgerType'Margin
+    deriving (Enum,Eq,Ord,Read,Show)
 
 instance Default LedgerType where
-  def = AllLedgerTypes
+  def = LedgerType'All
+
+instance FromJSON LedgerType where
+  parseJSON = withText "LedgerType" $ return . read . ("LedgerType'" ++) . over _head toUpper . T.unpack
 
 instance ToText LedgerType where
-  toText AllLedgerTypes = "all"
-  toText t = T.toLower . T.pack . show $ t
+  toText = T.toLower . T.pack . drop 11 . show
 
 -----------------------------------------------------------------------------
 
@@ -706,6 +745,22 @@ instance (ToFormUrlEncoded a) => ToFormUrlEncoded (PrivateRequest a) where
 
 -----------------------------------------------------------------------------
 
+newtype RefId = RefId { refId :: Text} deriving (Eq,Generic,Hashable,Show)
+
+instance FromJSON RefId where
+  parseJSON = withText "RefId" $ return . RefId
+
+-----------------------------------------------------------------------------
+
+data QueryLedgers = QueryLedgers
+  { queryledgersLedgers :: HashMap RefId LedgerInfo
+  } deriving Show
+
+instance FromJSON QueryLedgers where
+  parseJSON = parseResult >=> parseJSON >=> return . QueryLedgers . H.fromList . map (first RefId) . H.toList
+
+-----------------------------------------------------------------------------
+
 data QueryLedgersOptions = QueryLedgersOptions
   { queryledgersIds :: [Text]
   } deriving Show
@@ -715,7 +770,7 @@ instance Default QueryLedgersOptions where
 
 instance ToFormUrlEncoded QueryLedgersOptions where
   toFormUrlEncoded QueryLedgersOptions{..} =
-    [ ("txid", T.intercalate "," queryledgersIds) ]
+    [ ("id", T.intercalate "," queryledgersIds) ]
 
 -----------------------------------------------------------------------------
 

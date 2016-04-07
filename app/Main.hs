@@ -32,9 +32,9 @@ run cfg = do
     -- io =<< queryOrders    def
     -- io =<< tradesHistory  (TradesHistoryOptions (Just AllTradeTypes) True Nothing Nothing Nothing)
     -- io =<< queryTrades    (QueryTradesOptions ["123"] True)
-    io =<< openPositions  (OpenPositionsOptions ["123"] False)
+    -- io =<< openPositions  (OpenPositionsOptions ["123"] False)
     -- io =<< ledgers        def
-    -- io =<< queryLedgers   (QueryLedgersOptions ["123","321"])
+    io =<< queryLedgers   (QueryLedgersOptions ["123"])
     -- io =<< tradeVolume    (TradeVolumeOptions pairs)
   print r
  

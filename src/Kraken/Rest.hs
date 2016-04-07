@@ -76,8 +76,8 @@ type QueryOrdersService    = PrivateService "QueryOrders"   QueryOrdersOptions  
 type TradesHistoryService  = PrivateService "TradesHistory" TradesHistoryOptions TradesHistory
 type QueryTradesService    = PrivateService "QueryTrades"   QueryTradesOptions   QueryTrades
 type OpenPositionsService  = PrivateService "OpenPositions" OpenPositionsOptions Value
-type LedgersService        = PrivateService "Ledgers"       LedgersOptions       Value
-type QueryLedgersService   = PrivateService "QueryLedgers"  QueryLedgersOptions  Value
+type LedgersService        = PrivateService "Ledgers"       LedgersOptions       Ledgers
+type QueryLedgersService   = PrivateService "QueryLedgers"  QueryLedgersOptions  QueryLedgers
 type TradeVolumeService    = PrivateService "TradeVolume"   TradeVolumeOptions   Value
 
 -----------------------------------------------------------------------------
@@ -126,8 +126,8 @@ queryOrders_   :: Maybe Text -> Maybe Text -> PrivateRequest QueryOrdersOptions 
 tradesHistory_ :: Maybe Text -> Maybe Text -> PrivateRequest TradesHistoryOptions -> ServantT TradesHistory
 queryTrades_   :: Maybe Text -> Maybe Text -> PrivateRequest QueryTradesOptions -> ServantT QueryTrades
 openPositions_ :: Maybe Text -> Maybe Text -> PrivateRequest OpenPositionsOptions -> ServantT Value
-ledgers_       :: Maybe Text -> Maybe Text -> PrivateRequest LedgersOptions -> ServantT Value
-queryLedgers_  :: Maybe Text -> Maybe Text -> PrivateRequest QueryLedgersOptions -> ServantT Value
+ledgers_       :: Maybe Text -> Maybe Text -> PrivateRequest LedgersOptions -> ServantT Ledgers
+queryLedgers_  :: Maybe Text -> Maybe Text -> PrivateRequest QueryLedgersOptions -> ServantT QueryLedgers
 tradeVolume_   :: Maybe Text -> Maybe Text -> PrivateRequest TradeVolumeOptions -> ServantT Value
 
 time_
@@ -246,13 +246,13 @@ openPositions opts = privateRequest
   opts
   openPositions_
 
-ledgers :: LedgersOptions -> KrakenT Value
+ledgers :: LedgersOptions -> KrakenT Ledgers
 ledgers opts = privateRequest
   (show . safeLink api $ (Proxy :: Proxy LedgersService))
   opts
   ledgers_
 
-queryLedgers :: QueryLedgersOptions -> KrakenT Value
+queryLedgers :: QueryLedgersOptions -> KrakenT QueryLedgers
 queryLedgers opts = privateRequest
   (show . safeLink api $ (Proxy :: Proxy QueryLedgersService))
   opts
