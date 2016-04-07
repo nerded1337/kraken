@@ -23,8 +23,8 @@ Early stage work in progress.
   * [X] TradeHistory
   * [X] QueryTrades
   * [ ] OpenPosition
-  * [ ] Ledgers
-  * [ ] QueryLedgers
+  * [X] Ledgers
+  * [X] QueryLedgers
   * [ ] TradeVolume
   * [ ] AddOrder
   * [ ] CancelOrder
