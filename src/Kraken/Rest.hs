@@ -1,27 +1,65 @@
 module Kraken.Rest where
 
-import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Class
-import           Control.Monad.Trans.Either
-import           Control.Monad.Trans.Reader
-import           Crypto.Hash
-import           Data.Aeson.Types
-import           Data.Byteable
-import qualified Data.ByteString.Base64 as B64
-import qualified Data.ByteString.Char8 as BC
-import qualified Data.ByteString.Lazy as BL
-import           Data.Monoid
-import           Data.Proxy
+import           Control.Monad.IO.Class (liftIO)
+import           Control.Monad.Trans.Class (lift)
+import           Control.Monad.Trans.Reader (ReaderT,runReaderT,ask)
+import           Crypto.Hash (SHA256,SHA512,HMAC,Digest
+                             ,hmac,hash)
+import           Data.Aeson.Types (Value)
+import           Data.Byteable (toBytes)
+import qualified Data.ByteString.Base64 as B64 (encode)
+import qualified Data.ByteString.Char8 as BC (pack)
+import qualified Data.ByteString.Lazy as BL (toStrict)
+import           Data.Monoid ()
+import           Data.Proxy (Proxy(Proxy))
 import           Data.Text (Text)
 import           Data.Text.Encoding (decodeUtf8)
-import           Data.Time
-import           Data.Time.Clock.POSIX
-import           GHC.TypeLits
-import           Servant.API
-import           Servant.Client
+import           Data.Time (getCurrentTime)
+import           Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
+import           GHC.TypeLits (Symbol)
+import           Servant.API ((:<|>)(..),(:>)
+                             ,Post,ReqBody,JSON,Header,FormUrlEncoded
+                             ,safeLink,mimeRender)
+import           Servant.Client (ClientM,runClientM,client,ServantError,mkClientEnv
+                                ,BaseUrl(BaseUrl),Scheme(Https))
 
-import           Kraken.Types
+import           Kraken.Types (TradeVolumeOptions
+                              ,QueryLedgers,QueryLedgersOptions
+                              ,Ledgers,LedgersOptions
+                              ,OpenPositionsOptions
+                              ,QueryTrades,QueryTradesOptions
+                              
+                              ,QueryOrders,QueryOrdersOptions
+                              ,ClosedOrders,ClosedOrdersOptions
+                              ,OpenOrders,OpenOrdersOptions
+                              ,TradeBalanceOptions,Balance
+                              ,Spreads,SpreadOptions
+                              ,Trades,TradesOptions
 
+                              ,TradeBalance
+                              ,TradesHistory,TradesHistoryOptions
+                              ,OrderBook,OrderBookOptions
+                              ,OHLCs,OHLCOptions
+                              ,Ticker,TickerOptions
+
+                              ,AssetPairOptions
+                              ,AssetOptions
+                              ,Assets
+                              ,AssetPairs
+                              
+
+                              ,Config(Config),Time
+                              ,configAPIKey
+
+                              ,PrivateRequest(PrivateRequest)
+                              ,configPassword,configPrivateKey
+                              
+                              ,Host,Port
+
+                              )
+
+import           Web.FormUrlEncoded (ToForm)
+import           Network.HTTP.Client.TLS (newTlsManager)
 -----------------------------------------------------------------------------
 
 restHost :: Host
@@ -32,11 +70,16 @@ restPort = 443
 
 -----------------------------------------------------------------------------
 
-type ServantT = EitherT ServantError IO
-type KrakenT  = ReaderT Config ServantT
+-- type ServantT = ExceptT ServantError IO
+type KrakenT  = ReaderT Config ClientM
 
 runKraken :: Config -> KrakenT a -> IO (Either ServantError a)
-runKraken cfg = runEitherT . flip runReaderT cfg
+runKraken cfg ka = do
+    mgr <- newTlsManager
+    let env = mkClientEnv mgr baseUrl
+    flip runClientM env $ runReaderT ka cfg 
+  where baseUrl = BaseUrl Https restHost restPort ""
+
 
 -----------------------------------------------------------------------------
 
@@ -110,25 +153,25 @@ api = Proxy
 
 -----------------------------------------------------------------------------
 
-time_          :: () -> ServantT Time
-assets_        :: AssetOptions -> ServantT Assets
-assetPairs_    :: AssetPairOptions -> ServantT AssetPairs
-ticker_        :: TickerOptions -> ServantT Ticker
-ohlcs_         :: OHLCOptions -> ServantT OHLCs
-orderBook_     :: OrderBookOptions -> ServantT OrderBook
-trades_        :: TradesOptions -> ServantT Trades
-spreads_       :: SpreadOptions -> ServantT Spreads
-balance_       :: Maybe Text -> Maybe Text -> PrivateRequest () -> ServantT Balance
-tradeBalance_  :: Maybe Text -> Maybe Text -> PrivateRequest TradeBalanceOptions -> ServantT TradeBalance
-openOrders_    :: Maybe Text -> Maybe Text -> PrivateRequest OpenOrdersOptions -> ServantT OpenOrders
-closedOrders_  :: Maybe Text -> Maybe Text -> PrivateRequest ClosedOrdersOptions -> ServantT ClosedOrders
-queryOrders_   :: Maybe Text -> Maybe Text -> PrivateRequest QueryOrdersOptions -> ServantT QueryOrders
-tradesHistory_ :: Maybe Text -> Maybe Text -> PrivateRequest TradesHistoryOptions -> ServantT TradesHistory
-queryTrades_   :: Maybe Text -> Maybe Text -> PrivateRequest QueryTradesOptions -> ServantT QueryTrades
-openPositions_ :: Maybe Text -> Maybe Text -> PrivateRequest OpenPositionsOptions -> ServantT Value
-ledgers_       :: Maybe Text -> Maybe Text -> PrivateRequest LedgersOptions -> ServantT Ledgers
-queryLedgers_  :: Maybe Text -> Maybe Text -> PrivateRequest QueryLedgersOptions -> ServantT QueryLedgers
-tradeVolume_   :: Maybe Text -> Maybe Text -> PrivateRequest TradeVolumeOptions -> ServantT Value
+time_          :: () -> ClientM Time
+assets_        :: AssetOptions -> ClientM Assets
+assetPairs_    :: AssetPairOptions -> ClientM AssetPairs
+ticker_        :: TickerOptions -> ClientM Ticker
+ohlcs_         :: OHLCOptions -> ClientM OHLCs
+orderBook_     :: OrderBookOptions -> ClientM OrderBook
+trades_        :: TradesOptions -> ClientM Trades
+spreads_       :: SpreadOptions -> ClientM Spreads
+balance_       :: Maybe Text -> Maybe Text -> PrivateRequest () -> ClientM Balance
+tradeBalance_  :: Maybe Text -> Maybe Text -> PrivateRequest TradeBalanceOptions -> ClientM TradeBalance
+openOrders_    :: Maybe Text -> Maybe Text -> PrivateRequest OpenOrdersOptions -> ClientM OpenOrders
+closedOrders_  :: Maybe Text -> Maybe Text -> PrivateRequest ClosedOrdersOptions -> ClientM ClosedOrders
+queryOrders_   :: Maybe Text -> Maybe Text -> PrivateRequest QueryOrdersOptions -> ClientM QueryOrders
+tradesHistory_ :: Maybe Text -> Maybe Text -> PrivateRequest TradesHistoryOptions -> ClientM TradesHistory
+queryTrades_   :: Maybe Text -> Maybe Text -> PrivateRequest QueryTradesOptions -> ClientM QueryTrades
+openPositions_ :: Maybe Text -> Maybe Text -> PrivateRequest OpenPositionsOptions -> ClientM Value
+ledgers_       :: Maybe Text -> Maybe Text -> PrivateRequest LedgersOptions -> ClientM Ledgers
+queryLedgers_  :: Maybe Text -> Maybe Text -> PrivateRequest QueryLedgersOptions -> ClientM QueryLedgers
+tradeVolume_   :: Maybe Text -> Maybe Text -> PrivateRequest TradeVolumeOptions -> ClientM Value
 
 time_
   :<|> assets_
@@ -148,14 +191,14 @@ time_
   :<|> openPositions_
   :<|> ledgers_
   :<|> queryLedgers_
-  :<|> tradeVolume_  = client api (BaseUrl Https restHost restPort)
+  :<|> tradeVolume_  = client api -- (BaseUrl Https restHost restPort)
 
 -----------------------------------------------------------------------------
 
-privateRequest :: ToFormUrlEncoded a =>
+privateRequest :: ToForm a =>
                   String ->
                   a ->
-                  (Maybe Text -> Maybe Text -> PrivateRequest a -> ServantT b) ->
+                  (Maybe Text -> Maybe Text -> PrivateRequest a -> ClientM b) ->
                   KrakenT b
 privateRequest url d f = do
   Config{..}       <- ask

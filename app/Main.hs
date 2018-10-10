@@ -22,7 +22,7 @@ run cfg = do
     -- io =<< assetPairs     (AssetPairOptions pairs)
     -- io =<< ticker         (TickerOptions pairs)
     -- io =<< ohlcs          (OHLCOptions xbtusd 60 Nothing)
-    -- io =<< orderBook      (OrderBookOptions xbtusd (Just 5))
+    io =<< orderBook      (OrderBookOptions xbtusd (Just 5))
     -- io =<< trades         (TradesOptions xbtusd Nothing)
     -- io =<< spreads        (SpreadOptions xbtusd Nothing)
     -- io =<< balance
@@ -34,7 +34,7 @@ run cfg = do
     -- io =<< queryTrades    (QueryTradesOptions ["123"] True)
     -- io =<< openPositions  (OpenPositionsOptions ["123"] False)
     -- io =<< ledgers        def
-    io =<< queryLedgers   (QueryLedgersOptions ["123"])
+    -- io =<< queryLedgers   (QueryLedgersOptions ["123"])
     -- io =<< tradeVolume    (TradeVolumeOptions pairs)
   print r
  

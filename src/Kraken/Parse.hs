@@ -1,9 +1,12 @@
 module Kraken.Parse where
   
-import           Control.Applicative
-import           Data.Aeson
-import           Data.Aeson.Types
-import           Data.Scientific
+import           Control.Applicative ((<|>))
+import           Data.Aeson (Value(Null),FromJSON
+                            ,withText
+                            ,withObject
+                            ,parseJSON,(.:))
+import           Data.Aeson.Types (Parser)
+import           Data.Scientific (Scientific)
 import qualified Data.Text           as T (unpack)
 -----------------------------------------------------------------------------
 
