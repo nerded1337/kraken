@@ -42,6 +42,8 @@ library
                      , transformers
                      , unordered-containers
                      , vector
+                     , http-api-data
+                     , http-client-tls
   default-extensions:  DataKinds
                        DeriveGeneric
                        DeriveAnyClass

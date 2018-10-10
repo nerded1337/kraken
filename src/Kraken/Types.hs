@@ -1,32 +1,39 @@
 module Kraken.Types where
 
-import           Control.Arrow
-import           Control.Monad
-import           Data.Aeson
-import           Data.Aeson.Types
+import           Control.Arrow (first)
+import           Control.Monad ((>=>),mzero,guard)
+import           Data.Aeson (FromJSON(parseJSON),Value
+                            ,(.:),(.:?)
+                            ,withText,withObject,withArray,withScientific)
+import           Data.Aeson.Types (Parser,parseMaybe)
 import           Data.ByteString (ByteString)
-import qualified Data.ByteString.Base64 as B64
+import qualified Data.ByteString.Base64 as B64 (decode)
 import           Data.Char (toUpper)
-import           Data.Default
-import           Data.Hashable
+import           Data.Default (Default(def))
+import           Data.Hashable (Hashable)
 import           Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as H (delete,filter,fromList,keys,map,toList)
-import           Data.Maybe
-import           Data.Ratio
-import           Data.Scientific
+import           Data.Maybe (isJust,fromJust)
+import           Data.Ratio ((%))
+import           Data.Scientific (Scientific)
 import           Data.Text (Text)
 import qualified Data.Text as T (concat,intercalate,pack,toLower,unpack)
 import           Data.Text.Encoding (decodeUtf8)
-import           Data.Time
-import           Data.Time.Clock.POSIX
+import           Data.Time (UTCTime)
+import           Data.Time.Clock.POSIX (posixSecondsToUTCTime,utcTimeToPOSIXSeconds)
 import           Data.Vector ((!))
-import           GHC.Generics
-import           Lens.Micro
-import           Servant.API
-import           System.Envy
+import           GHC.Generics (Generic)
+import           Lens.Micro ((&),over,_head)
 
-import           Kraken.Parse
+import           System.Envy (FromEnv(fromEnv),envMaybe)
 
+import           Kraken.Parse (parseResult,parseScientific
+                              ,parseMaybeJustNull,parseMaybeNull)
+
+import           Web.HttpApiData (ToHttpApiData(toUrlPiece))
+import           Web.FormUrlEncoded (ToForm(toForm),toListStable)
+
+import           GHC.Exts (fromList)
 -----------------------------------------------------------------------------
 
 newtype Amount = Amount { amount :: Scientific } deriving (Show)
@@ -53,8 +60,8 @@ instance Default Asset where
 
 instance Hashable Asset
 
-instance ToText Asset where
-  toText = T.pack . show
+instance ToHttpApiData Asset where
+  toUrlPiece = T.pack . show
 
 -----------------------------------------------------------------------------
 
@@ -70,8 +77,8 @@ instance FromJSON AssetClass where
     "currency" -> return Currency
     _          -> fail ""
 
-instance ToText AssetClass where
-  toText = T.toLower . T.pack . show
+instance ToHttpApiData AssetClass where
+  toUrlPiece = T.toLower . T.pack . show
 
 -----------------------------------------------------------------------------
 
@@ -99,11 +106,11 @@ data AssetOptions = AssetOptions
 instance Default AssetOptions where
   def = AssetOptions Currency []
 
-instance ToFormUrlEncoded AssetOptions where
-  toFormUrlEncoded AssetOptions{..} =
-    [ ("aclass",toText assetClass) ]
+instance ToForm AssetOptions where
+  toForm AssetOptions{..} = fromList $
+    [ ("aclass",toUrlPiece assetClass) ]
     ++
-    [ ("asset",(T.intercalate "," . map toText) assetAssets) | not . null $ assetAssets ]
+    [ ("asset",(T.intercalate "," . map toUrlPiece) assetAssets) | not . null $ assetAssets ]
 
 -----------------------------------------------------------------------------
 
@@ -126,9 +133,9 @@ instance FromJSON AssetPair where
 instance Default AssetPair where
   def = AssetPair XXBT ZUSD
 
-instance ToText AssetPair where
-  toText AssetPair{..} = T.concat [ toText assetpairBase
-                                  , toText assetpairQuote
+instance ToHttpApiData AssetPair where
+  toUrlPiece AssetPair{..} = T.concat [ toUrlPiece assetpairBase
+                                  , toUrlPiece assetpairQuote
                                   ]
 
 -----------------------------------------------------------------------------
@@ -191,11 +198,11 @@ data AssetPairOptions = AssetPairOptions
 instance Default AssetPairOptions where
   def = AssetPairOptions []
 
-instance ToFormUrlEncoded AssetPairOptions where
-  toFormUrlEncoded AssetPairOptions{..} =
+instance ToForm AssetPairOptions where
+  toForm AssetPairOptions{..} = fromList $
     [ ("info","info") ]
     ++
-    [ ("pair",(T.intercalate "," . map toText) assetpairPairs) | (not . null) assetpairPairs ]
+    [ ("pair",(T.intercalate "," . map toUrlPiece) assetpairPairs) | (not . null) assetpairPairs ]
 
 -----------------------------------------------------------------------------
 
@@ -255,15 +262,15 @@ data ClosedOrdersOptions = ClosedOrdersOptions
 instance Default ClosedOrdersOptions where
   def = ClosedOrdersOptions False Nothing Nothing Nothing Nothing Both
 
-instance ToFormUrlEncoded ClosedOrdersOptions where
-  toFormUrlEncoded ClosedOrdersOptions{..} =
-    [ ("trades",T.toLower . toText . show $ closedordersoptionsIncludeTrades ) ]
+instance ToForm ClosedOrdersOptions where
+  toForm ClosedOrdersOptions{..} = fromList $
+    [ ("trades",T.toLower . toUrlPiece . show $ closedordersoptionsIncludeTrades ) ]
     ++
     [ ("userref",r) | Just r <- [closedordersoptionsUserRef] ]
     ++
-    [("start",toText start) | Just start <- [closedordersoptionsStart] ]
+    [("start",toUrlPiece start) | Just start <- [closedordersoptionsStart] ]
     ++
-    [("end",toText end) | Just end <- [closedordersoptionsEnd] ]
+    [("end",toUrlPiece end) | Just end <- [closedordersoptionsEnd] ]
     ++
     [ ("ofs",T.pack . show $ ofs) | Just ofs <- [closedordersoptionsOffset] ]
     ++
@@ -368,17 +375,17 @@ data LedgersOptions = LedgersOptions
 instance Default LedgersOptions where
   def = LedgersOptions Currency [] Nothing Nothing Nothing Nothing
 
-instance ToFormUrlEncoded LedgersOptions where
-  toFormUrlEncoded LedgersOptions{..} = 
-    [ ("aclass",toText ledgersAssetClass) ]
+instance ToForm LedgersOptions where
+  toForm LedgersOptions{..} = fromList $
+    [ ("aclass",toUrlPiece ledgersAssetClass) ]
     ++
-    [ ("asset",(T.intercalate "," . map toText) ledgersAssets) | (not . null) ledgersAssets ]
+    [ ("asset",(T.intercalate "," . map toUrlPiece) ledgersAssets) | (not . null) ledgersAssets ]
     ++
-    [ ("type",toText t) | Just t <- [ledgersType] ]
+    [ ("type",toUrlPiece t) | Just t <- [ledgersType] ]
     ++
-    [ ("start",toText start) | Just start <- [ledgersStart] ]
+    [ ("start",toUrlPiece start) | Just start <- [ledgersStart] ]
     ++
-    [ ("end",toText end) | Just end <- [ledgersEnd] ]
+    [ ("end",toUrlPiece end) | Just end <- [ledgersEnd] ]
     ++
     [ ("ofs",T.pack . show $ ofs) | Just ofs <- [ledgersOffset] ]
 
@@ -398,8 +405,8 @@ instance Default LedgerType where
 instance FromJSON LedgerType where
   parseJSON = withText "LedgerType" $ return . read . ("LedgerType'" ++) . over _head toUpper . T.unpack
 
-instance ToText LedgerType where
-  toText = T.toLower . T.pack . drop 11 . show
+instance ToHttpApiData LedgerType where
+  toUrlPiece = T.toLower . T.pack . drop 11 . show
 
 -----------------------------------------------------------------------------
 
@@ -436,9 +443,9 @@ data OHLCOptions = OHLCOptions
 instance Default OHLCOptions where
   def = OHLCOptions def 1 Nothing
 
-instance ToFormUrlEncoded OHLCOptions where
-  toFormUrlEncoded OHLCOptions{..} =
-    [ ("pair",toText ohlcPair)
+instance ToForm OHLCOptions where
+  toForm OHLCOptions{..} = fromList $
+    [ ("pair",toUrlPiece ohlcPair)
     , ("interval",T.pack $ show ohlcIntervalMins)
     ]
     ++
@@ -481,11 +488,11 @@ data OpenOrdersOptions = OpenOrdersOptions
 instance Default OpenOrdersOptions where
   def = OpenOrdersOptions False Nothing
 
-instance ToFormUrlEncoded OpenOrdersOptions where
-  toFormUrlEncoded OpenOrdersOptions{..} =
-    [ ("trades",T.toLower . toText . show $ openordersoptionsIncludeTrades ) ]
+instance ToForm OpenOrdersOptions where
+  toForm OpenOrdersOptions{..} = fromList $
+    [ ("trades",T.toLower . toUrlPiece . show $ openordersoptionsIncludeTrades ) ]
     ++
-    [ ("userref",toText r) | Just r <- [openordersoptionsUserRef] ]
+    [ ("userref",toUrlPiece r) | Just r <- [openordersoptionsUserRef] ]
 
 -----------------------------------------------------------------------------
 
@@ -497,10 +504,10 @@ data OpenPositionsOptions = OpenPositionsOptions
 instance Default OpenPositionsOptions where
   def = OpenPositionsOptions [] False
 
-instance ToFormUrlEncoded OpenPositionsOptions where
-  toFormUrlEncoded OpenPositionsOptions{..} =
+instance ToForm OpenPositionsOptions where
+  toForm OpenPositionsOptions{..} = fromList $
     [ ("txid", T.intercalate "," openpositionsTxnIds )
-    , ("docalcs",T.toLower . toText . show $ openpositionsIncludePL )
+    , ("docalcs",T.toLower . toUrlPiece . show $ openpositionsIncludePL )
     ]
 
 -----------------------------------------------------------------------------
@@ -543,9 +550,9 @@ data OrderBookOptions = OrderBookOptions
 instance Default OrderBookOptions where
   def = OrderBookOptions def Nothing
 
-instance ToFormUrlEncoded OrderBookOptions where
-  toFormUrlEncoded OrderBookOptions{..} = 
-    [ ("pair",toText orderbookoptionsPair) ]
+instance ToForm OrderBookOptions where
+  toForm OrderBookOptions{..} =  fromList $
+    [ ("pair",toUrlPiece orderbookoptionsPair) ]
     ++
     [ ("count",T.pack (show count)) | Just count <- [orderbookoptionsCount]]
 
@@ -735,13 +742,13 @@ data PrivateRequest a = PrivateRequest
   , privaterequestData  :: a
   }
 
-instance (ToFormUrlEncoded a) => ToFormUrlEncoded (PrivateRequest a) where
-  toFormUrlEncoded PrivateRequest{..} = 
+instance (ToForm a) => ToForm (PrivateRequest a) where
+  toForm PrivateRequest{..} =  fromList $
     [ ("nonce",T.pack . show $ privaterequestNonce) ]
     ++
     [ ("otp",decodeUtf8 otp) | Just otp <- [privaterequestOTP] ]
     ++
-    toFormUrlEncoded privaterequestData
+    (toListStable . toForm) privaterequestData
 
 -----------------------------------------------------------------------------
 
@@ -768,8 +775,8 @@ data QueryLedgersOptions = QueryLedgersOptions
 instance Default QueryLedgersOptions where
   def = QueryLedgersOptions []
 
-instance ToFormUrlEncoded QueryLedgersOptions where
-  toFormUrlEncoded QueryLedgersOptions{..} =
+instance ToForm QueryLedgersOptions where
+  toForm QueryLedgersOptions{..} = fromList $
     [ ("id", T.intercalate "," queryledgersIds) ]
 
 -----------------------------------------------------------------------------
@@ -793,11 +800,11 @@ data QueryOrdersOptions = QueryOrdersOptions
 instance Default QueryOrdersOptions where
   def = QueryOrdersOptions False Nothing [""]
 
-instance ToFormUrlEncoded QueryOrdersOptions where
-  toFormUrlEncoded QueryOrdersOptions{..} =
-    [ ("trades",T.toLower . toText . show $ queryordersIncludeTrades ) ]
+instance ToForm QueryOrdersOptions where
+  toForm QueryOrdersOptions{..} = fromList $
+    [ ("trades",T.toLower . toUrlPiece . show $ queryordersIncludeTrades ) ]
     ++
-    [ ("userref",toText r) | Just r <- [queryordersUserRef] ]
+    [ ("userref",toUrlPiece r) | Just r <- [queryordersUserRef] ]
     ++
     [ ("txid", T.intercalate "," queryordersTxnIds ) ]
 
@@ -820,11 +827,11 @@ data QueryTradesOptions = QueryTradesOptions
 instance Default QueryTradesOptions where
   def = QueryTradesOptions [] False
 
-instance ToFormUrlEncoded QueryTradesOptions where
-  toFormUrlEncoded QueryTradesOptions{..} =
+instance ToForm QueryTradesOptions where
+  toForm QueryTradesOptions{..} = fromList $
     [ ("txid", T.intercalate "," querytradesTxnIds ) ]
     ++
-    [ ("trades",T.toLower . toText . show $ querytradesIncludeTrades ) ]
+    [ ("trades",T.toLower . toUrlPiece . show $ querytradesIncludeTrades ) ]
 
 -----------------------------------------------------------------------------
 
@@ -850,9 +857,9 @@ data SpreadOptions = SpreadOptions
 instance Default SpreadOptions where
   def = SpreadOptions def Nothing
 
-instance ToFormUrlEncoded SpreadOptions where
-  toFormUrlEncoded SpreadOptions{..} =
-    [ ("pair",toText spreadPair)]
+instance ToForm SpreadOptions where
+  toForm SpreadOptions{..} = fromList $
+    [ ("pair",toUrlPiece spreadPair)]
     ++
     [ ("since",since) | Just since <- [spreadSince] ]
 
@@ -916,9 +923,9 @@ data TickerOptions = TickerOptions
 instance Default TickerOptions where
   def = TickerOptions []
 
-instance ToFormUrlEncoded TickerOptions where
-  toFormUrlEncoded TickerOptions{..} =
-    [ ("pair",(T.intercalate "," . map toText) tickerPairs)
+instance ToForm TickerOptions where
+  toForm TickerOptions{..} = fromList $
+    [ ("pair",(T.intercalate "," . map toUrlPiece) tickerPairs)
     ]
 
 -----------------------------------------------------------------------------
@@ -949,9 +956,9 @@ data TimeBound =
   | TimeBound'TxnId Text
     deriving Show
 
-instance ToText TimeBound where
-  toText (TimeBound'DateTime ut) = T.pack . show . utcTimeToPOSIXSeconds $ ut
-  toText (TimeBound'TxnId ti) = ti
+instance ToHttpApiData TimeBound where
+  toUrlPiece (TimeBound'DateTime ut) = T.pack . show . utcTimeToPOSIXSeconds $ ut
+  toUrlPiece (TimeBound'TxnId ti) = ti
 
 -----------------------------------------------------------------------------
 
@@ -1000,11 +1007,11 @@ data TradeBalanceOptions = TradeBalanceOptions
 instance Default TradeBalanceOptions where
   def = TradeBalanceOptions (Just Currency) ZUSD
 
-instance ToFormUrlEncoded TradeBalanceOptions where
-  toFormUrlEncoded TradeBalanceOptions{..} =
-    [ ("aclass",toText c) | Just c <- [tradebalanceAssetClass] ]
+instance ToForm TradeBalanceOptions where
+  toForm TradeBalanceOptions{..} = fromList $
+    [ ("aclass",toUrlPiece c) | Just c <- [tradebalanceAssetClass] ]
     ++
-    [ ("asset",toText tradebalanceAsset) ]
+    [ ("asset",toUrlPiece tradebalanceAsset) ]
 
 -----------------------------------------------------------------------------
 
@@ -1104,15 +1111,15 @@ data TradesHistoryOptions = TradesHistoryOptions
 instance Default TradesHistoryOptions where
   def = TradesHistoryOptions Nothing False Nothing Nothing Nothing
 
-instance ToFormUrlEncoded TradesHistoryOptions where
-  toFormUrlEncoded TradesHistoryOptions{..} =
-    [ ("type",toText t) | Just t <- [tradeshistoryoptionsType] ]
+instance ToForm TradesHistoryOptions where
+  toForm TradesHistoryOptions{..} = fromList $
+    [ ("type",toUrlPiece t) | Just t <- [tradeshistoryoptionsType] ]
     ++
-    [ ("trades",T.toLower . toText . show $ tradeshistoryoptionsIncludeTrades ) ]
+    [ ("trades",T.toLower . toUrlPiece . show $ tradeshistoryoptionsIncludeTrades ) ]
     ++
-    [("start",toText start) | Just start <- [tradeshistoryoptionsStart] ]
+    [("start",toUrlPiece start) | Just start <- [tradeshistoryoptionsStart] ]
     ++
-    [("end",toText end) | Just end <- [tradeshistoryoptionsEnd] ]
+    [("end",toUrlPiece end) | Just end <- [tradeshistoryoptionsEnd] ]
     ++
     [ ("ofs",T.pack . show $ ofs) | Just ofs <- [tradeshistoryoptionsOffset] ]
 
@@ -1126,9 +1133,9 @@ data TradesOptions = TradesOptions
 instance Default TradesOptions where
   def = TradesOptions def Nothing
 
-instance ToFormUrlEncoded TradesOptions where
-  toFormUrlEncoded TradesOptions{..} =
-    [ ("pair",toText tradesoptionsPair)]
+instance ToForm TradesOptions where
+  toForm TradesOptions{..} = fromList $
+    [ ("pair",toUrlPiece tradesoptionsPair)]
     ++
     [ ("since",since) | Just since <- [tradesoptionsSince] ]
 
@@ -1145,8 +1152,8 @@ data TradeType =
 instance Default TradeType where
   def = AllTradeTypes
 
-instance ToText TradeType where
-  toText = \case 
+instance ToHttpApiData TradeType where
+  toUrlPiece = \case 
     AllTradeTypes   -> "all"
     AnyPosition     -> "any position"
     ClosedPosition  -> "closed position"
@@ -1162,11 +1169,11 @@ data TradeVolumeOptions = TradeVolumeOptions
 instance Default TradeVolumeOptions where
   def = TradeVolumeOptions []
 
-instance ToFormUrlEncoded TradeVolumeOptions where
-  toFormUrlEncoded TradeVolumeOptions{..} =
+instance ToForm TradeVolumeOptions where
+  toForm TradeVolumeOptions{..} = fromList $
     case tradevolumeFeePairs of 
       [] -> []
-      _  -> [ ("pair",(T.intercalate "," . map toText) tradevolumeFeePairs)
+      _  -> [ ("pair",(T.intercalate "," . map toUrlPiece) tradevolumeFeePairs)
             , ("fee-info","true")
             ]
 
@@ -1189,6 +1196,6 @@ instance FromJSON Volume where parseJSON = fmap Volume . parseScientific
 
 -----------------------------------------------------------------------------
 
-instance ToFormUrlEncoded () where
-  toFormUrlEncoded () = []
+instance ToForm () where
+  toForm () = fromList []
 
