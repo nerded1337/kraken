@@ -1,20 +1,11 @@
+{-# LANGUAGE TypeApplications #-}
 module Kraken.Util where
 
-import           Data.Maybe (fromMaybe)
-import           System.Envy (decodeEnv)
-
-import           Kraken.Types (Config,EnvVars(EnvVars)
-                              ,envvarsAPIKey,envvarsPrivateKeyB64,envvarsPassword
-                              ,mkConfig)
+import           Kraken.Types (Config)
+import           System.Envy  (decodeEnv)
 
 -----------------------------------------------------------------------------
 
 getConfig :: IO (Either String Config)
-getConfig = decodeEnv >>= return . either Left config
- where
-  config :: EnvVars -> Either String Config
-  config EnvVars{..} = mkConfig
-    (fromMaybe "" envvarsAPIKey)
-    (fromMaybe "" envvarsPrivateKeyB64)
-    envvarsPassword
+getConfig = decodeEnv @Config
 

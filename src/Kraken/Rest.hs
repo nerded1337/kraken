@@ -1,66 +1,55 @@
+{-# LANGUAGE DataKinds        #-}
+{-# LANGUAGE RecordWildCards  #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators    #-}
+
 module Kraken.Rest where
 
-import           Control.Monad.IO.Class (liftIO)
-import           Control.Monad.Trans.Class (lift)
-import           Control.Monad.Trans.Reader (ReaderT,runReaderT,ask)
-import           Crypto.Hash (SHA256,SHA512,HMAC,Digest
-                             ,hmac,hash)
-import           Data.Aeson.Types (Value)
-import           Data.Byteable (toBytes)
-import qualified Data.ByteString.Base64 as B64 (encode)
-import qualified Data.ByteString.Char8 as BC (pack)
-import qualified Data.ByteString.Lazy as BL (toStrict)
-import           Data.Monoid ()
-import           Data.Proxy (Proxy(Proxy))
-import           Data.Text (Text)
-import           Data.Text.Encoding (decodeUtf8)
-import           Data.Time (getCurrentTime)
-import           Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
-import           GHC.TypeLits (Symbol)
-import           Servant.API ((:<|>)(..),(:>)
-                             ,Post,ReqBody,JSON,Header,FormUrlEncoded
-                             ,safeLink,mimeRender)
-import           Servant.Client (ClientM,runClientM,client,ServantError,mkClientEnv
-                                ,BaseUrl(BaseUrl),Scheme(Https))
-
-import           Kraken.Types (TradeVolumeOptions
-                              ,QueryLedgers,QueryLedgersOptions
-                              ,Ledgers,LedgersOptions
-                              ,OpenPositionsOptions
-                              ,QueryTrades,QueryTradesOptions
-                              
-                              ,QueryOrders,QueryOrdersOptions
-                              ,ClosedOrders,ClosedOrdersOptions
-                              ,OpenOrders,OpenOrdersOptions
-                              ,TradeBalanceOptions,Balance
-                              ,Spreads,SpreadOptions
-                              ,Trades,TradesOptions
-
-                              ,TradeBalance
-                              ,TradesHistory,TradesHistoryOptions
-                              ,OrderBook,OrderBookOptions
-                              ,OHLCs,OHLCOptions
-                              ,Ticker,TickerOptions
-
-                              ,AssetPairOptions
-                              ,AssetOptions
-                              ,Assets
-                              ,AssetPairs
-                              
-
-                              ,Config(Config),Time
-                              ,configAPIKey
-
-                              ,PrivateRequest(PrivateRequest)
-                              ,configPassword,configPrivateKey
-                              
-                              ,Host,Port
-
-                              )
-
-import           Web.FormUrlEncoded (ToForm)
-import           Network.HTTP.Client.TLS (newTlsManager)
------------------------------------------------------------------------------
+import           Control.Monad.IO.Class     (liftIO)
+import           Control.Monad.Trans.Class  (lift)
+import           Control.Monad.Trans.Reader (ReaderT, ask, runReaderT)
+import           Crypto.Hash                (Digest, HMAC, SHA256, SHA512, hash,
+                                             hmac)
+import           Data.Aeson.Types           (Value)
+import           Data.Byteable              (toBytes)
+import qualified Data.ByteString.Base64     as B64 (encode)
+import qualified Data.ByteString.Char8      as BC (pack)
+import qualified Data.ByteString.Lazy       as BL (toStrict)
+import           Data.Monoid                ()
+import           Data.Proxy                 (Proxy (Proxy))
+import           Data.Text                  (Text)
+import           Data.Text.Encoding         (decodeUtf8)
+import           Data.Time                  (getCurrentTime)
+import           Data.Time.Clock.POSIX      (utcTimeToPOSIXSeconds)
+import           GHC.TypeLits               (Symbol)
+import           Kraken.Types               (AssetOptions, AssetPairOptions,
+                                             AssetPairs, Assets, Balance,
+                                             ClosedOrders, ClosedOrdersOptions,
+                                             Config (Config), Host, Ledgers,
+                                             LedgersOptions, OHLCOptions, OHLCs,
+                                             OpenOrders, OpenOrdersOptions,
+                                             OpenPositionsOptions, OrderBook,
+                                             OrderBookOptions, Port,
+                                             PrivateRequest (PrivateRequest),
+                                             QueryLedgers, QueryLedgersOptions,
+                                             QueryOrders, QueryOrdersOptions,
+                                             QueryTrades, QueryTradesOptions,
+                                             SpreadOptions, Spreads, Ticker,
+                                             TickerOptions, Time, TradeBalance,
+                                             TradeBalanceOptions,
+                                             TradeVolumeOptions, Trades,
+                                             TradesHistory,
+                                             TradesHistoryOptions,
+                                             TradesOptions, configApiKey,
+                                             configPassword, configPrivateKey)
+import           Network.HTTP.Client.TLS    (newTlsManager)
+import           Servant.API                ((:<|>) (..), (:>), FormUrlEncoded,
+                                             Header, JSON, Post, ReqBody,
+                                             mimeRender, safeLink)
+import           Servant.Client             (BaseUrl (BaseUrl), ClientError,
+                                             ClientM, Scheme (Https), client,
+                                             mkClientEnv, runClientM)
+import           Web.FormUrlEncoded         (ToForm)
 
 restHost :: Host
 restHost = "api.kraken.com"
@@ -68,20 +57,15 @@ restHost = "api.kraken.com"
 restPort :: Port
 restPort = 443
 
------------------------------------------------------------------------------
-
--- type ServantT = ExceptT ServantError IO
 type KrakenT  = ReaderT Config ClientM
 
-runKraken :: Config -> KrakenT a -> IO (Either ServantError a)
+runKraken :: Config -> KrakenT a -> IO (Either ClientError a)
 runKraken cfg ka = do
-    mgr <- newTlsManager
-    let env = mkClientEnv mgr baseUrl
-    flip runClientM env $ runReaderT ka cfg 
-  where baseUrl = BaseUrl Https restHost restPort ""
-
-
------------------------------------------------------------------------------
+  mgr <- newTlsManager
+  let env = mkClientEnv mgr baseUrl
+  flip runClientM env $ runReaderT ka cfg
+  where
+    baseUrl = BaseUrl Https restHost restPort ""
 
 type KrakenAPI             = TimeService
                         :<|> AssetService
@@ -123,15 +107,11 @@ type LedgersService        = PrivateService "Ledgers"       LedgersOptions      
 type QueryLedgersService   = PrivateService "QueryLedgers"  QueryLedgersOptions  QueryLedgers
 type TradeVolumeService    = PrivateService "TradeVolume"   TradeVolumeOptions   Value
 
------------------------------------------------------------------------------
-
 type APIVersion            = "0"
 type Public                = "public"
 type Private               = "private"
 
------------------------------------------------------------------------------
-
-type PublicService 
+type PublicService
      (a :: Symbol) b c     = APIVersion
                              :> Public
                              :> a
@@ -146,12 +126,8 @@ type PrivateService
                              :> ReqBody '[FormUrlEncoded] (PrivateRequest b)
                              :> Post '[JSON] c
 
------------------------------------------------------------------------------
-
 api :: Proxy KrakenAPI
 api = Proxy
-
------------------------------------------------------------------------------
 
 time_          :: () -> ClientM Time
 assets_        :: AssetOptions -> ClientM Assets
@@ -181,7 +157,7 @@ time_
   :<|> orderBook_
   :<|> trades_
   :<|> spreads_
-  :<|> balance_ 
+  :<|> balance_
   :<|> tradeBalance_
   :<|> openOrders_
   :<|> closedOrders_
@@ -191,9 +167,7 @@ time_
   :<|> openPositions_
   :<|> ledgers_
   :<|> queryLedgers_
-  :<|> tradeVolume_  = client api -- (BaseUrl Https restHost restPort)
-
------------------------------------------------------------------------------
+  :<|> tradeVolume_  = client api
 
 privateRequest :: ToForm a =>
                   String ->
@@ -201,21 +175,20 @@ privateRequest :: ToForm a =>
                   (Maybe Text -> Maybe Text -> PrivateRequest a -> ClientM b) ->
                   KrakenT b
 privateRequest url d f = do
-  Config{..}       <- ask
-  utcTime          <- liftIO getCurrentTime
-  let apiKey       =  decodeUtf8 configAPIKey
-      uri          =  BC.pack $ "/" <> url
-      nonce        =  fromEnum . utcTimeToPOSIXSeconds $ utcTime
-      privReq      =  PrivateRequest nonce configPassword d
-      postData     =  BL.toStrict $ mimeRender (Proxy :: Proxy FormUrlEncoded) privReq
-      nonceBytes   =  BC.pack . show $ nonce
-      hashPostData =  toBytes (hash (nonceBytes <> postData) :: Digest SHA256)
-      msg          =  uri <> hashPostData
-      hmacMsg      =  hmac configPrivateKey msg :: HMAC SHA512
-      apiSign      =  decodeUtf8 . B64.encode . toBytes $ hmacMsg
+  Config {..} <- ask
+  utcTime <- liftIO getCurrentTime
+  let apiKey       = decodeUtf8 configApiKey
+      uri          = BC.pack $ "/" <> url
+      nonce        = fromEnum . utcTimeToPOSIXSeconds $ utcTime
+      privReq      = PrivateRequest nonce configPassword d
+      postData     =
+        BL.toStrict $ mimeRender (Proxy @FormUrlEncoded) privReq
+      nonceBytes   = BC.pack . show $ nonce
+      hashPostData = toBytes (hash (nonceBytes <> postData) :: Digest SHA256)
+      msg          = uri <> hashPostData
+      hmacMsg      = hmac configPrivateKey msg :: HMAC SHA512
+      apiSign      = decodeUtf8 . B64.encode . toBytes $ hmacMsg
   lift $ f (Just apiKey) (Just apiSign) privReq
-
------------------------------------------------------------------------------
 
 time :: KrakenT Time
 time = lift $ time_ ()
@@ -242,67 +215,78 @@ spreads :: SpreadOptions -> KrakenT Spreads
 spreads = lift . spreads_
 
 balance :: KrakenT Balance
-balance = privateRequest 
-  (show . safeLink api $ (Proxy :: Proxy BalanceService))
-  ()
-  balance_
+balance =
+  privateRequest
+    (show . safeLink api $ (Proxy @BalanceService))
+    ()
+    balance_
 
 tradeBalance :: TradeBalanceOptions -> KrakenT TradeBalance
-tradeBalance opts = privateRequest
-  (show . safeLink api $ (Proxy :: Proxy TradeBalanceService))
-  opts
-  tradeBalance_
+tradeBalance opts =
+  privateRequest
+    (show . safeLink api $ (Proxy @TradeBalanceService))
+    opts
+    tradeBalance_
 
 openOrders :: OpenOrdersOptions -> KrakenT OpenOrders
-openOrders opts = privateRequest
-  (show . safeLink api $ (Proxy :: Proxy OpenOrdersService))
-  opts
-  openOrders_
+openOrders opts =
+  privateRequest
+    (show . safeLink api $ (Proxy @OpenOrdersService))
+    opts
+    openOrders_
 
 closedOrders :: ClosedOrdersOptions -> KrakenT ClosedOrders
-closedOrders opts = privateRequest
-  (show . safeLink api $ (Proxy :: Proxy ClosedOrdersService))
-  opts
-  closedOrders_
+closedOrders opts =
+  privateRequest
+    (show . safeLink api $ (Proxy @ClosedOrdersService))
+    opts
+    closedOrders_
 
 queryOrders :: QueryOrdersOptions -> KrakenT QueryOrders
-queryOrders opts = privateRequest
-  (show . safeLink api $ (Proxy :: Proxy QueryOrdersService))
-  opts
-  queryOrders_
+queryOrders opts =
+  privateRequest
+    (show . safeLink api $ (Proxy @QueryOrdersService))
+    opts
+    queryOrders_
 
 tradesHistory :: TradesHistoryOptions -> KrakenT TradesHistory
-tradesHistory opts = privateRequest
-  (show . safeLink api $ (Proxy :: Proxy TradesHistoryService))
-  opts
-  tradesHistory_
+tradesHistory opts =
+  privateRequest
+    (show . safeLink api $ (Proxy @TradesHistoryService))
+    opts
+    tradesHistory_
 
 queryTrades :: QueryTradesOptions -> KrakenT QueryTrades
-queryTrades opts = privateRequest
-  (show . safeLink api $ (Proxy :: Proxy QueryTradesService))
-  opts
-  queryTrades_
+queryTrades opts =
+  privateRequest
+    (show . safeLink api $ (Proxy @QueryTradesService))
+    opts
+    queryTrades_
 
 openPositions :: OpenPositionsOptions -> KrakenT Value
-openPositions opts = privateRequest
-  (show . safeLink api $ (Proxy :: Proxy OpenPositionsService))
-  opts
-  openPositions_
+openPositions opts =
+  privateRequest
+    (show . safeLink api $ (Proxy @OpenPositionsService))
+    opts
+    openPositions_
 
 ledgers :: LedgersOptions -> KrakenT Ledgers
-ledgers opts = privateRequest
-  (show . safeLink api $ (Proxy :: Proxy LedgersService))
-  opts
-  ledgers_
+ledgers opts =
+  privateRequest
+    (show . safeLink api $ (Proxy @LedgersService))
+    opts
+    ledgers_
 
 queryLedgers :: QueryLedgersOptions -> KrakenT QueryLedgers
-queryLedgers opts = privateRequest
-  (show . safeLink api $ (Proxy :: Proxy QueryLedgersService))
-  opts
-  queryLedgers_
+queryLedgers opts =
+  privateRequest
+    (show . safeLink api $ (Proxy @QueryLedgersService))
+    opts
+    queryLedgers_
 
 tradeVolume :: TradeVolumeOptions -> KrakenT Value
-tradeVolume opts = privateRequest
-  (show . safeLink api $ (Proxy :: Proxy TradeVolumeService))
-  opts
-  tradeVolume_
+tradeVolume opts =
+  privateRequest
+    (show . safeLink api $ (Proxy @TradeVolumeService))
+    opts
+    tradeVolume_

@@ -1,59 +1,66 @@
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeOperators       #-}
+{-# LANGUAGE DerivingStrategies       #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving       #-}
+
 module Kraken.Types where
 
-import           Control.Arrow (first)
-import           Control.Monad ((>=>),mzero,guard)
-import           Data.Aeson (FromJSON(parseJSON),Value
-                            ,(.:),(.:?)
-                            ,withText,withObject,withArray,withScientific)
-import           Data.Aeson.Types (Parser,parseMaybe)
-import           Data.ByteString (ByteString)
+import           Control.Arrow          (first)
+import           Control.Monad          (guard, mzero, (>=>))
+import           Data.Aeson             (FromJSON (parseJSON), Value, withArray, ToJSON, ToJSONKey,
+                                         withObject, withScientific, withText,
+                                         (.:), (.:?))
+import           Data.Aeson.Types       (Parser, parseMaybe)
+import           Data.ByteString        (ByteString)
 import qualified Data.ByteString.Base64 as B64 (decode)
-import           Data.Char (toUpper)
-import           Data.Default (Default(def))
-import           Data.Hashable (Hashable)
-import           Data.HashMap.Strict (HashMap)
-import qualified Data.HashMap.Strict as H (delete,filter,fromList,keys,map,toList)
-import           Data.Maybe (isJust,fromJust)
-import           Data.Ratio ((%))
-import           Data.Scientific (Scientific)
-import           Data.Text (Text)
-import qualified Data.Text as T (concat,intercalate,pack,toLower,unpack)
-import           Data.Text.Encoding (decodeUtf8)
-import           Data.Time (UTCTime)
-import           Data.Time.Clock.POSIX (posixSecondsToUTCTime,utcTimeToPOSIXSeconds)
-import           Data.Vector ((!))
-import           GHC.Generics (Generic)
-import           Lens.Micro ((&),over,_head)
+import           Data.Char              (toUpper)
+import           Data.Default           (Default (def))
+import           Data.Hashable          (Hashable)
+import           Data.HashMap.Strict    (HashMap)
+import qualified Data.HashMap.Strict    as H (delete, filter, fromList, keys,
+                                              map, toList)
+import           Data.Maybe             (fromJust, isJust)
+import           Data.Ratio             ((%))
+import           Data.Scientific        (Scientific)
+import           Data.Text              (Text)
+import qualified Data.Text              as T (concat, intercalate, pack,
+                                              toLower, unpack)
+import           Data.Text.Encoding     (decodeUtf8)
+import           Data.Time              (UTCTime)
+import           Data.Time.Clock.POSIX  (posixSecondsToUTCTime,
+                                         utcTimeToPOSIXSeconds)
+import           Data.Vector            ((!))
+import           GHC.Exts               (fromList)
+import           GHC.Generics           (Generic)
+import           Kraken.Parse           (parseMaybeJustNull, parseMaybeNull,
+                                         parseResult)
+import           Lens.Micro             (over, (&), _head)
+import           System.Envy            (FromEnv)
+import           Web.FormUrlEncoded     (ToForm (toForm), toListStable)
+import           Web.HttpApiData        (ToHttpApiData (toUrlPiece))
 
-import           System.Envy (FromEnv(fromEnv),envMaybe)
-
-import           Kraken.Parse (parseResult,parseScientific
-                              ,parseMaybeJustNull,parseMaybeNull)
-
-import           Web.HttpApiData (ToHttpApiData(toUrlPiece))
-import           Web.FormUrlEncoded (ToForm(toForm),toListStable)
-
-import           GHC.Exts (fromList)
------------------------------------------------------------------------------
-
-newtype Amount = Amount { amount :: Scientific } deriving (Show)
-
-instance FromJSON Amount where parseJSON = fmap Amount . parseScientific
+newtype Amount =
+  Amount
+    { amount :: Scientific
+    }
+  deriving newtype (Show, ToJSON, FromJSON)
 
 maybeAmount :: Amount -> Maybe Amount
 maybeAmount a@(Amount s) = if (s == 0) then Nothing else (Just a)
 
------------------------------------------------------------------------------
-
-data Asset = 
-    XXBT
+data Asset
+  = XXBT
   | XETH
   | ZCAD
   | ZEUR
   | ZGBP
   | ZJPY
   | ZUSD
-    deriving (Eq,FromJSON,Generic,Ord,Read,Show)
+  deriving stock (Eq, Generic, Ord, Read, Show)
+  deriving anyclass (ToJSON, FromJSON)
 
 instance Default Asset where
   def = XXBT
@@ -63,18 +70,16 @@ instance Hashable Asset
 instance ToHttpApiData Asset where
   toUrlPiece = T.pack . show
 
------------------------------------------------------------------------------
-
 data AssetClass =
-    Currency
-    deriving (Generic,Show)
+  Currency
+  deriving (Generic, Show, ToJSON)
 
 instance Default AssetClass where
   def = Currency
 
 instance FromJSON AssetClass where
   parseJSON = withText "class" $ \case
-    "currency" -> return Currency
+    "currency" -> pure Currency
     _          -> fail ""
 
 instance ToHttpApiData AssetClass where
@@ -82,12 +87,15 @@ instance ToHttpApiData AssetClass where
 
 -----------------------------------------------------------------------------
 
-data AssetInfo = AssetInfo
-  { assetinfoDisplayDecimals :: Int
-  , assetinfoClass :: AssetClass
-  , assetinfoDecimals :: Int
-  , assetinfoAltName :: Text
-  } deriving Show
+data AssetInfo =
+  AssetInfo
+    { assetinfoDisplayDecimals :: Int
+    , assetinfoClass :: AssetClass
+    , assetinfoDecimals :: Int
+    , assetinfoAltName :: Text
+    }
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance FromJSON AssetInfo where
   parseJSON = withObject "asset info" $ \o -> AssetInfo
@@ -98,66 +106,75 @@ instance FromJSON AssetInfo where
 
 -----------------------------------------------------------------------------
 
-data AssetOptions = AssetOptions
-  { assetClass :: AssetClass
-  , assetAssets :: [Asset]
-  } deriving Show
+data AssetOptions =
+  AssetOptions
+    { assetClass :: AssetClass
+    , assetAssets :: [Asset]
+    }
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance Default AssetOptions where
   def = AssetOptions Currency []
 
 instance ToForm AssetOptions where
-  toForm AssetOptions{..} = fromList $
-    [ ("aclass",toUrlPiece assetClass) ]
-    ++
-    [ ("asset",(T.intercalate "," . map toUrlPiece) assetAssets) | not . null $ assetAssets ]
+  toForm AssetOptions {..} =
+    fromList $
+    [("aclass", toUrlPiece assetClass)] ++
+    [ ("asset", (T.intercalate "," . map toUrlPiece) assetAssets)
+    | not . null $ assetAssets
+    ]
 
 -----------------------------------------------------------------------------
 
-data AssetPair = AssetPair
-  { assetpairBase  :: Asset
-  , assetpairQuote :: Asset
-  } deriving (Eq,Generic,Hashable,Show)
+data AssetPair =
+  AssetPair
+    { assetpairBase :: Asset
+    , assetpairQuote :: Asset
+    }
+  deriving stock (Eq, Generic, Show)
+  deriving anyclass (Hashable, ToJSON, ToJSONKey)
 
 instance Read AssetPair where
   readsPrec p s | length s >= 8 = do let (bs,qs) = splitAt 4 s
                                      (b,br) <- readsPrec p bs
                                      guard (null br)
                                      (q,qr) <- readsPrec p qs
-                                     return (AssetPair b q,qr)
+                                     pure (AssetPair b q,qr)
                 | otherwise     = []
 
 instance FromJSON AssetPair where
-  parseJSON = withText "AssetPair" (return . read . T.unpack)
+  parseJSON = withText "AssetPair" (pure . read . T.unpack)
 
 instance Default AssetPair where
   def = AssetPair XXBT ZUSD
 
 instance ToHttpApiData AssetPair where
-  toUrlPiece AssetPair{..} = T.concat [ toUrlPiece assetpairBase
-                                  , toUrlPiece assetpairQuote
-                                  ]
+  toUrlPiece AssetPair {..} =
+    T.concat [toUrlPiece assetpairBase, toUrlPiece assetpairQuote]
 
 -----------------------------------------------------------------------------
 
-data AssetPairInfo = AssetPairInfo
-  { assetpairinfoAltName :: Text
-  , assetpairinfoBaseAssetClass :: AssetClass
-  , assetpairinfoBaseAsset :: Asset
-  , assetpairinfoQuoteAssetClass :: AssetClass
-  , assetpairinfoQuoteAsset :: Asset
-  , assetpairinfoLot :: String -- TBC
-  , assetpairinfoPairDecimals :: Int
-  , assetpairinfoLotDecimals :: Int
-  , assetpairinfoLotMultiplier :: Int
-  , assetpairinfoLeverageBuy :: [Scientific]
-  , assetpairinfoLeverageSell :: [Scientific]
-  , assetpairinfoFees :: [(Scientific,Scientific)]
-  , assetpairinfoFeesMaker :: [(Scientific,Scientific)]
-  , assetpairinfoFeeVolumeCurrency :: Asset
-  , assetpairinfoMarginCall :: Scientific
-  , assetpairinfoMarginStop :: Scientific
-  } deriving Show
+data AssetPairInfo =
+  AssetPairInfo
+    { assetpairinfoAltName :: Text
+    , assetpairinfoBaseAssetClass :: AssetClass
+    , assetpairinfoBaseAsset :: Asset
+    , assetpairinfoQuoteAssetClass :: AssetClass
+    , assetpairinfoQuoteAsset :: Asset
+    , assetpairinfoLot :: String -- TBC
+    , assetpairinfoPairDecimals :: Int
+    , assetpairinfoLotDecimals :: Int
+    , assetpairinfoLotMultiplier :: Int
+    , assetpairinfoLeverageBuy :: [Scientific]
+    , assetpairinfoLeverageSell :: [Scientific]
+    , assetpairinfoFees :: [(Scientific, Scientific)]
+    , assetpairinfoFeesMaker :: [(Scientific, Scientific)]
+    , assetpairinfoFeeVolumeCurrency :: Asset
+    , assetpairinfoMarginCall :: Scientific
+    , assetpairinfoMarginStop :: Scientific
+    }
+  deriving (Show)
 
 instance FromJSON AssetPairInfo where
   parseJSON = withObject "asset pair info" $ \o -> AssetPairInfo
@@ -180,20 +197,24 @@ instance FromJSON AssetPairInfo where
 
 -----------------------------------------------------------------------------
 
-data AssetPairs = AssetPairs
-  { assetpairsPairs :: HashMap AssetPair AssetPairInfo
-  } deriving Show
+data AssetPairs =
+  AssetPairs
+    { assetpairsPairs :: HashMap AssetPair AssetPairInfo
+    }
+  deriving (Show)
 
 instance FromJSON AssetPairs where
   parseJSON = parseResult
     >=> parseJSON
-    >=> return . AssetPairs . H.fromList . map (first read) . H.toList
+    >=> pure . AssetPairs . H.fromList . map (first read) . H.toList
 
 -----------------------------------------------------------------------------
 
-data AssetPairOptions = AssetPairOptions
-  { assetpairPairs :: [AssetPair]
-  } deriving Show
+data AssetPairOptions =
+  AssetPairOptions
+    { assetpairPairs :: [AssetPair]
+    }
+  deriving (Show)
 
 instance Default AssetPairOptions where
   def = AssetPairOptions []
@@ -206,58 +227,68 @@ instance ToForm AssetPairOptions where
 
 -----------------------------------------------------------------------------
 
-newtype Assets = Assets
-  { assetsAssets :: HashMap Asset AssetInfo
-  } deriving Show
+newtype Assets =
+  Assets
+    { assetsAssets :: HashMap Asset AssetInfo
+    }
+  deriving (Show)
 
 instance FromJSON Assets where
   parseJSON = parseResult
     >=> parseJSON
-    >=> return . Assets . H.fromList . map (first read) . H.toList
+    >=> pure . Assets . H.fromList . map (first read) . H.toList
 
 -----------------------------------------------------------------------------
 
-data BalanceInfo = BalanceInfo
-  { balanceinfoBalance :: Scientific
-  } deriving Show
+data BalanceInfo =
+  BalanceInfo
+    { balanceinfoBalance :: Scientific
+    }
+  deriving (Show)
 
 instance FromJSON BalanceInfo where
-  parseJSON = withText "BalanceInfo" $ return . BalanceInfo . read . T.unpack
+  parseJSON = withText "BalanceInfo" $ pure . BalanceInfo . read . T.unpack
 
 -----------------------------------------------------------------------------
 
-data Balance = Balance
-  { balanceBalances :: HashMap Asset BalanceInfo
-  } deriving Show
+data Balance =
+  Balance
+    { balanceBalances :: HashMap Asset BalanceInfo
+    }
+  deriving (Show)
 
 instance FromJSON Balance where
   parseJSON = parseResult
     >=> parseJSON
-    >=> return . Balance . H.fromList . map (first read) . H.toList
+    >=> pure . Balance . H.fromList . map (first read) . H.toList
 
 -----------------------------------------------------------------------------
 
-data ClosedOrders = ClosedOrders
-  { closedordersOrders :: HashMap TxnId OrderInfo
-  , closedordersCount :: Int
-  } deriving Show
+data ClosedOrders =
+  ClosedOrders
+    { closedordersOrders :: HashMap TxnId OrderInfo
+    , closedordersCount :: Int
+    }
+  deriving (Show)
 
 instance FromJSON ClosedOrders where
   parseJSON = parseResult >=> withObject "ClosedOrders" (\o -> do
-    closedordersOrders <- o .: "closed" >>= parseJSON >>= return . H.fromList . map (first TxnId) . H.toList
-    closedordersCount  <- o .: "count"      
-    return ClosedOrders{..})
+    closedordersOrders <- o .: "closed" >>= parseJSON >>= pure . H.fromList . map (first TxnId) . H.toList
+    closedordersCount  <- o .: "count"
+    pure ClosedOrders{..})
 
 -----------------------------------------------------------------------------
 
-data ClosedOrdersOptions = ClosedOrdersOptions
-  { closedordersoptionsIncludeTrades :: Bool
-  , closedordersoptionsUserRef :: Maybe Text
-  , closedordersoptionsStart :: Maybe TimeBound
-  , closedordersoptionsEnd  :: Maybe TimeBound
-  , closedordersoptionsOffset  :: Maybe Int
-  , closedordersoptionsCloseTime  :: CloseTime
-  } deriving Show
+data ClosedOrdersOptions =
+  ClosedOrdersOptions
+    { closedordersoptionsIncludeTrades :: Bool
+    , closedordersoptionsUserRef :: Maybe Text
+    , closedordersoptionsStart :: Maybe TimeBound
+    , closedordersoptionsEnd :: Maybe TimeBound
+    , closedordersoptionsOffset :: Maybe Int
+    , closedordersoptionsCloseTime :: CloseTime
+    }
+  deriving (Show)
 
 instance Default ClosedOrdersOptions where
   def = ClosedOrdersOptions False Nothing Nothing Nothing Nothing Both
@@ -278,29 +309,24 @@ instance ToForm ClosedOrdersOptions where
 
 -----------------------------------------------------------------------------
 
-data CloseTime =
-    Open
+data CloseTime
+  = Open
   | Close
   | Both
-    deriving (Eq,Enum,Ord,Show)
+  deriving (Eq, Enum, Ord, Show)
 
 instance Default CloseTime where
   def = Both
 
 -----------------------------------------------------------------------------
 
-data Config = Config
-  { configAPIKey     :: ByteString
-  , configPrivateKey :: ByteString
-  , configPassword   :: Maybe ByteString
-  } deriving Show
-
-instance Default Config where
-  def = Config
-    { configAPIKey     = ""
-    , configPrivateKey = ""
-    , configPassword   = Nothing
+data Config =
+  Config
+    { configApiKey :: ByteString
+    , configPrivateKey :: ByteString
+    , configPassword :: Maybe ByteString
     }
+  deriving (Generic, Show)
 
 mkConfig :: ByteString -> ByteString -> Maybe ByteString -> Either String Config
 mkConfig ak pk pw = case B64.decode pk of
@@ -309,16 +335,7 @@ mkConfig ak pk pw = case B64.decode pk of
 
 -----------------------------------------------------------------------------
 
-data EnvVars = EnvVars
-  { envvarsAPIKey        :: Maybe ByteString
-  , envvarsPrivateKeyB64 :: Maybe ByteString
-  , envvarsPassword      :: Maybe ByteString
-  } deriving (Generic,Show)
-
-instance FromEnv EnvVars where
-  fromEnv = EnvVars <$> envMaybe "KRAKEN_API_KEY"
-                    <*> envMaybe "KRAKEN_API_PRIVKEY"
-                    <*> envMaybe "KRAKEN_API_PASSWORD"
+instance FromEnv Config where
 
 -----------------------------------------------------------------------------
 
@@ -326,16 +343,19 @@ type Host = String
 
 -----------------------------------------------------------------------------
 
-data LedgerInfo = LedgerInfo
-  { ledgerinfoRefId :: RefId
-  , ledgerinfoTime :: Timestamp
-  , ledgerinfoType :: LedgerType
-  , ledgerinfoAclass :: AssetClass
-  , ledgerinfoAsset :: Asset
-  , ledgerinfoAmount :: Amount
-  , ledgerinfoFee :: Amount
-  , ledgerinfoBalance :: Amount
-  } deriving Show
+data LedgerInfo =
+  LedgerInfo
+    { ledgerinfoRefId :: RefId
+    , ledgerinfoTime :: Timestamp
+    , ledgerinfoType :: LedgerType
+    , ledgerinfoAclass :: AssetClass
+    , ledgerinfoAsset :: Asset
+    , ledgerinfoAmount :: Amount
+    , ledgerinfoFee :: Amount
+    , ledgerinfoBalance :: Amount
+    }
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance FromJSON LedgerInfo where
   parseJSON = withObject "LedgerInfo" $ \o -> LedgerInfo
@@ -350,27 +370,31 @@ instance FromJSON LedgerInfo where
 
 -----------------------------------------------------------------------------
 
-data Ledgers = Ledgers
-  { ledgersCount :: Int
-  , ledgersLedgers :: HashMap RefId LedgerInfo
-  } deriving Show
+data Ledgers =
+  Ledgers
+    { ledgersCount :: Int
+    , ledgersLedgers :: HashMap RefId LedgerInfo
+    }
+  deriving (Show)
 
 instance FromJSON Ledgers where
   parseJSON = parseResult >=> withObject "Ledgers" (\o -> do
     ledgersCount   <- o .: "count"
-    ledgersLedgers <- o .: "ledger" >>= parseJSON >>= return . H.fromList . map (first RefId) . H.toList
-    return Ledgers{..})
+    ledgersLedgers <- o .: "ledger" >>= parseJSON >>= pure . H.fromList . map (first RefId) . H.toList
+    pure Ledgers{..})
 
 -----------------------------------------------------------------------------
 
-data LedgersOptions = LedgersOptions
-  { ledgersAssetClass :: AssetClass
-  , ledgersAssets :: [Asset]
-  , ledgersType :: Maybe LedgerType
-  , ledgersStart :: Maybe TimeBound
-  , ledgersEnd  :: Maybe TimeBound
-  , ledgersOffset  :: Maybe Int  
-  } deriving Show
+data LedgersOptions =
+  LedgersOptions
+    { ledgersAssetClass :: AssetClass
+    , ledgersAssets :: [Asset]
+    , ledgersType :: Maybe LedgerType
+    , ledgersStart :: Maybe TimeBound
+    , ledgersEnd :: Maybe TimeBound
+    , ledgersOffset :: Maybe Int
+    }
+  deriving (Show)
 
 instance Default LedgersOptions where
   def = LedgersOptions Currency [] Nothing Nothing Nothing Nothing
@@ -391,35 +415,38 @@ instance ToForm LedgersOptions where
 
 -----------------------------------------------------------------------------
 
-data LedgerType =
-    LedgerType'All
+data LedgerType
+  = LedgerType'All
   | LedgerType'Deposit
   | LedgerType'Withdrawal
   | LedgerType'Trade
   | LedgerType'Margin
-    deriving (Enum,Eq,Ord,Read,Show)
+  deriving (Enum, Eq, Ord, Read, Show, Generic, ToJSON)
 
 instance Default LedgerType where
   def = LedgerType'All
 
 instance FromJSON LedgerType where
-  parseJSON = withText "LedgerType" $ return . read . ("LedgerType'" ++) . over _head toUpper . T.unpack
+  parseJSON = withText "LedgerType" $ pure . read . ("LedgerType'" ++) . over _head toUpper . T.unpack
 
 instance ToHttpApiData LedgerType where
   toUrlPiece = T.toLower . T.pack . drop 11 . show
 
 -----------------------------------------------------------------------------
 
-data OHLC = OHLC
-  { ohlcTime :: UTCTime
-  , ohlcOpen :: Scientific
-  , ohlcHigh :: Scientific
-  , ohlcLow :: Scientific
-  , ohlcClose :: Scientific
-  , ohlcVWAP :: Scientific
-  , ohlcVol :: Scientific
-  , ohlcNumTrades :: Int
-  } deriving Show
+data OHLC =
+  OHLC
+    { ohlcTime :: UTCTime
+    , ohlcOpen :: Scientific
+    , ohlcHigh :: Scientific
+    , ohlcLow :: Scientific
+    , ohlcClose :: Scientific
+    , ohlcVWAP :: Scientific
+    , ohlcVol :: Scientific
+    , ohlcNumTrades :: Int
+    }
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance FromJSON OHLC where
   parseJSON = withArray "OHLC" $ \v -> OHLC
@@ -430,15 +457,18 @@ instance FromJSON OHLC where
     <*> fmap read (parseJSON (v ! 4))
     <*> fmap read (parseJSON (v ! 5))
     <*> fmap read (parseJSON (v ! 6))
-    <*> parseJSON (v ! 7) 
+    <*> parseJSON (v ! 7)
 
 -----------------------------------------------------------------------------
 
-data OHLCOptions = OHLCOptions
-  { ohlcPair :: AssetPair
-  , ohlcIntervalMins :: Int
-  , ohlcSince :: Maybe Text
-  } deriving Show
+data OHLCOptions =
+  OHLCOptions
+    { ohlcPair :: AssetPair
+    , ohlcIntervalMins :: Int
+    , ohlcSince :: Maybe UTCTime
+    }
+  deriving  (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance Default OHLCOptions where
   def = OHLCOptions def 1 Nothing
@@ -449,14 +479,17 @@ instance ToForm OHLCOptions where
     , ("interval",T.pack $ show ohlcIntervalMins)
     ]
     ++
-    [ ("since",since) | Just since <- [ohlcSince] ]
+    [ ("since",T.pack $ show $ utcTimeToPOSIXSeconds since) | Just since <- [ohlcSince] ]
 
 -----------------------------------------------------------------------------
 
-data OHLCs = OHLCs
-  { ohlcsLast :: UTCTime
-  , ohlcsOHLCs :: HashMap AssetPair [OHLC]
-  } deriving Show
+data OHLCs =
+  OHLCs
+    { ohlcsLast :: UTCTime
+    , ohlcsOHLCs :: HashMap AssetPair [OHLC]
+    }
+  deriving  (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance FromJSON OHLCs where
   parseJSON = parseResult >=> withObject "OHLCs" (\o -> do
@@ -464,26 +497,32 @@ instance FromJSON OHLCs where
     let o' = H.map (parseMaybe (parseJSON :: Value -> Parser [OHLC])) (H.delete "last" o)
     let o'' = (H.map fromJust . H.filter isJust) o'
     let ohlcsOHLCs = (H.fromList . map (first (read . T.unpack)) . H.toList) o''
-    return OHLCs{..})
+    pure OHLCs{..})
 
 -----------------------------------------------------------------------------
 
-data OpenOrders = OpenOrders
-  { unOpenOrders :: HashMap TxnId OrderInfo
-  } deriving Show
+data OpenOrders =
+  OpenOrders
+    { unOpenOrders :: HashMap TxnId OrderInfo
+    }
+  deriving  (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance FromJSON OpenOrders where
   parseJSON = parseResult
     >=> withObject "OpenOrders" (\o -> o .: "open")
     >=> parseJSON
-    >=> return . OpenOrders . H.fromList . map (first TxnId) . H.toList
+    >=> pure . OpenOrders . H.fromList . map (first TxnId) . H.toList
 
 -----------------------------------------------------------------------------
 
-data OpenOrdersOptions = OpenOrdersOptions
-  { openordersoptionsIncludeTrades :: Bool
-  , openordersoptionsUserRef :: Maybe Text
-  } deriving Show
+data OpenOrdersOptions =
+  OpenOrdersOptions
+    { openordersoptionsIncludeTrades :: Bool
+    , openordersoptionsUserRef :: Maybe Text
+    }
+  deriving  (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance Default OpenOrdersOptions where
   def = OpenOrdersOptions False Nothing
@@ -496,10 +535,13 @@ instance ToForm OpenOrdersOptions where
 
 -----------------------------------------------------------------------------
 
-data OpenPositionsOptions = OpenPositionsOptions
-  { openpositionsTxnIds :: [Text]
-  , openpositionsIncludePL :: Bool
-  } deriving Show
+data OpenPositionsOptions =
+  OpenPositionsOptions
+    { openpositionsTxnIds :: [Text]
+    , openpositionsIncludePL :: Bool
+    }
+  deriving  (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance Default OpenPositionsOptions where
   def = OpenPositionsOptions [] False
@@ -512,11 +554,14 @@ instance ToForm OpenPositionsOptions where
 
 -----------------------------------------------------------------------------
 
-data OrderBook = OrderBook
-  { orderbookPair :: AssetPair
-  , orderbookBids :: [OrderBookEntry]
-  , orderbookAsks :: [OrderBookEntry]
-  } deriving Show
+data OrderBook =
+  OrderBook
+    { orderbookPair :: AssetPair
+    , orderbookBids :: [OrderBookEntry]
+    , orderbookAsks :: [OrderBookEntry]
+    }
+  deriving  (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance FromJSON OrderBook where
   parseJSON = parseResult >=> parseJSON >=> withObject "OrderBook" (\o -> do
@@ -524,15 +569,18 @@ instance FromJSON OrderBook where
     ob <- o .: p
     bs <- ob .: "bids"
     as <- ob .: "asks"
-    return $ OrderBook (read $ T.unpack p) bs as)
+    pure $ OrderBook (read $ T.unpack p) bs as)
 
 -----------------------------------------------------------------------------
 
-data OrderBookEntry = OrderBookEntry
-  { orderbookentryPrice :: Scientific
-  , orderbookentryVol :: Scientific
-  , orderbookentryTime :: UTCTime
-  } deriving Show
+data OrderBookEntry =
+  OrderBookEntry
+    { orderbookentryPrice :: Scientific
+    , orderbookentryVol :: Scientific
+    , orderbookentryTime :: UTCTime
+    }
+  deriving  (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance FromJSON OrderBookEntry where
   parseJSON = withArray "OrderBookEntry" $ \v -> OrderBookEntry
@@ -542,10 +590,13 @@ instance FromJSON OrderBookEntry where
 
 -----------------------------------------------------------------------------
 
-data OrderBookOptions = OrderBookOptions
-  { orderbookoptionsPair :: AssetPair
-  , orderbookoptionsCount :: Maybe Int
-  } deriving Show
+data OrderBookOptions =
+  OrderBookOptions
+    { orderbookoptionsPair :: AssetPair
+    , orderbookoptionsCount :: Maybe Int
+    }
+  deriving  (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance Default OrderBookOptions where
   def = OrderBookOptions def Nothing
@@ -558,16 +609,19 @@ instance ToForm OrderBookOptions where
 
 -----------------------------------------------------------------------------
 
-data OrderDescription = OrderDescription
-  { orderdescPair :: Text -- TBC
-  , orderdescDir :: OrderDir
-  , orderdescType :: OrderType
-  , orderdescPrimaryPrice :: Price
-  , orderdescSecondaryPrice :: Maybe Price
-  , orderdescLeverage :: Text -- TBC
-  , orderdescDescription :: Text
-  , orderdescClose :: Maybe Text
-  } deriving Show
+data OrderDescription =
+  OrderDescription
+    { orderdescPair :: Text -- TBC
+    , orderdescDir :: OrderDir
+    , orderdescType :: OrderType
+    , orderdescPrimaryPrice :: Price
+    , orderdescSecondaryPrice :: Maybe Price
+    , orderdescLeverage :: Text -- TBC
+    , orderdescDescription :: Text
+    , orderdescClose :: Maybe Text
+    }
+  deriving  (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance FromJSON OrderDescription where
   parseJSON = withObject "OrderDescription" $ \o -> OrderDescription
@@ -582,42 +636,46 @@ instance FromJSON OrderDescription where
 
 -----------------------------------------------------------------------------
 
-data OrderDir =
-    OrderDir'Buy
+data OrderDir
+  = OrderDir'Buy
   | OrderDir'Sell
-    deriving Show
+  deriving  (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance FromJSON OrderDir where
   parseJSON = withText "OrderDir" $ \case
-    "b"    -> return OrderDir'Buy
-    "buy"  -> return OrderDir'Buy
-    "s"    -> return OrderDir'Sell
-    "sell" -> return OrderDir'Sell
+    "b"    -> pure OrderDir'Buy
+    "buy"  -> pure OrderDir'Buy
+    "s"    -> pure OrderDir'Sell
+    "sell" -> pure OrderDir'Sell
     _      -> mzero
 
 -----------------------------------------------------------------------------
 
-data OrderInfo = OrderInfo
-  { orderinfoRefTxnId :: Maybe TxnId
-  , orderinfoUserRef :: Maybe UserRef
-  , orderinfoStatus :: OrderStatus
-  , orderinfoOpenTime :: Timestamp
-  , orderinfoStartTime :: Maybe Timestamp 
-  , orderinfoCloseTime :: Maybe Timestamp
-  , orderinfoExpireTime :: Maybe Timestamp
-  , orderinfoDescription :: OrderDescription
-  , orderinfoStatusReason :: Maybe Text
-  , orderinfoVol :: Volume
-  , orderinfoVolExecuted :: Volume
-  , orderinfoCost :: Amount
-  , orderinfoFee :: Amount
-  , orderinfoAveragePrice :: Price
-  , orderinfoStopPrice :: Maybe Price
-  , orderinfoLimitPrice :: Maybe Price
-  , orderinfoMisc :: Text -- TBC
-  , orderinfoFlags :: Text -- TBC
-  , orderinfoTrades :: Maybe [TxnId]
-  } deriving Show
+data OrderInfo =
+  OrderInfo
+    { orderinfoRefTxnId :: Maybe TxnId
+    , orderinfoUserRef :: Maybe UserRef
+    , orderinfoStatus :: OrderStatus
+    , orderinfoOpenTime :: Timestamp
+    , orderinfoStartTime :: Maybe Timestamp
+    , orderinfoCloseTime :: Maybe Timestamp
+    , orderinfoExpireTime :: Maybe Timestamp
+    , orderinfoDescription :: OrderDescription
+    , orderinfoStatusReason :: Maybe Text
+    , orderinfoVol :: Volume
+    , orderinfoVolExecuted :: Volume
+    , orderinfoCost :: Amount
+    , orderinfoFee :: Amount
+    , orderinfoAveragePrice :: Price
+    , orderinfoStopPrice :: Maybe Price
+    , orderinfoLimitPrice :: Maybe Price
+    , orderinfoMisc :: Text -- TBC
+    , orderinfoFlags :: Text -- TBC
+    , orderinfoTrades :: Maybe [TxnId]
+    }
+  deriving  (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance FromJSON OrderInfo where
   parseJSON = withObject "OrderInfo" $ \o -> OrderInfo
@@ -643,21 +701,22 @@ instance FromJSON OrderInfo where
 
 -----------------------------------------------------------------------------
 
-data OrderStatus = 
-    OrderStatus'Pending
+data OrderStatus
+  = OrderStatus'Pending
   | OrderStatus'Open
   | OrderStatus'Closed
   | OrderStatus'Canceled
   | OrderStatus'Expired
-    deriving (Enum,Eq,Ord,Read,Show)
+  deriving stock (Enum, Eq, Ord, Read, Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance FromJSON OrderStatus where
-  parseJSON = withText "OrderStatus" $ return . read . ("OrderStatus'" ++) . over _head toUpper . T.unpack
+  parseJSON = withText "OrderStatus" $ pure . read . ("OrderStatus'" ++) . over _head toUpper . T.unpack
 
 -----------------------------------------------------------------------------
 
-data OrderType =
-    OrderType'Limit
+data OrderType
+  = OrderType'Limit
   | OrderType'Market
   | OrderType'StopLoss
   | OrderType'StopLossAndLimit
@@ -668,23 +727,24 @@ data OrderType =
   | OrderType'TakeProfitLimit
   | OrderType'TrailingStop
   | OrderType'TrailingStopLimit
-    deriving Show
+  deriving stock (Enum, Eq, Ord, Read, Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance FromJSON OrderType where
   parseJSON = withText "OrderType" $ \case
-    "l"                      -> return OrderType'Limit
-    "limit"                  -> return OrderType'Limit
-    "m"                      -> return OrderType'Market
-    "market"                 -> return OrderType'Market
-    "stop-loss"              -> return OrderType'StopLoss
-    "stop-loss-and-limit"    -> return OrderType'StopLossAndLimit
-    "stop-loss-limit"        -> return OrderType'StopLossLimit
-    "stop-loss-profit"       -> return OrderType'StopLossProfit
-    "stop-loss-profit-limit" -> return OrderType'StopLossProfitLimit
-    "take-profit"            -> return OrderType'TakeProfit
-    "take-profit-limit"      -> return OrderType'TakeProfitLimit
-    "trailing-stop"          -> return OrderType'TrailingStop
-    "trailing-stop-limit"    -> return OrderType'TrailingStopLimit
+    "l"                      -> pure OrderType'Limit
+    "limit"                  -> pure OrderType'Limit
+    "m"                      -> pure OrderType'Market
+    "market"                 -> pure OrderType'Market
+    "stop-loss"              -> pure OrderType'StopLoss
+    "stop-loss-and-limit"    -> pure OrderType'StopLossAndLimit
+    "stop-loss-limit"        -> pure OrderType'StopLossLimit
+    "stop-loss-profit"       -> pure OrderType'StopLossProfit
+    "stop-loss-profit-limit" -> pure OrderType'StopLossProfitLimit
+    "take-profit"            -> pure OrderType'TakeProfit
+    "take-profit-limit"      -> pure OrderType'TakeProfitLimit
+    "trailing-stop"          -> pure OrderType'TrailingStop
+    "trailing-stop-limit"    -> pure OrderType'TrailingStopLimit
     _                        -> mzero
 
 -----------------------------------------------------------------------------
@@ -693,16 +753,19 @@ type Port = Int
 
 -----------------------------------------------------------------------------
 
-data PositionInfo = PositionInfo
-  { positioninfoStatus :: PositionStatus
-  , positioninfoClosedPrice :: Price
-  , positioninfoClosedCost :: Amount
-  , positioninfoClosedFee :: Amount
-  , positioninfoClosedVol :: Amount
-  , positioninfoClosedMargin :: Amount
-  , positioninfoClosedNetPL :: Amount
-  , positioninfoClosedTrades :: [Value]  -- TBC
-  } deriving Show
+data PositionInfo =
+  PositionInfo
+    { positioninfoStatus :: PositionStatus
+    , positioninfoClosedPrice :: Price
+    , positioninfoClosedCost :: Amount
+    , positioninfoClosedFee :: Amount
+    , positioninfoClosedVol :: Amount
+    , positioninfoClosedMargin :: Amount
+    , positioninfoClosedNetPL :: Amount
+    , positioninfoClosedTrades :: [Value] -- TBC
+    }
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON)
 
 
 instance FromJSON PositionInfo where
@@ -717,30 +780,35 @@ instance FromJSON PositionInfo where
     <*> o .: "trades"
 -----------------------------------------------------------------------------
 
-data PositionStatus = 
-    PositionStatus'Open
+data PositionStatus
+  = PositionStatus'Open
   | PositionStatus'Closed
-    deriving (Enum,Eq,Ord,Read,Show)
+  deriving (Enum, Eq, Ord, Read, Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance FromJSON PositionStatus where
-  parseJSON = withText "PositionStatus" $ return . read . ("PositionStatus'" ++) . over _head toUpper . T.unpack
+  parseJSON = withText "PositionStatus" $ pure . read . ("PositionStatus'" ++) . over _head toUpper . T.unpack
 
 -----------------------------------------------------------------------------
 
-newtype Price = Price { price :: Scientific } deriving (Show)
-
-instance FromJSON Price where parseJSON = fmap Price . parseScientific
+newtype Price =
+  Price
+    { price :: Scientific
+    }
+  deriving stock (Show, Generic)
+  deriving newtype (FromJSON, ToJSON)
 
 maybePrice :: Price -> Maybe Price
 maybePrice p@(Price s) = if (s == 0) then Nothing else (Just p)
 
 -----------------------------------------------------------------------------
 
-data PrivateRequest a = PrivateRequest
-  { privaterequestNonce :: Int
-  , privaterequestOTP   :: Maybe ByteString
-  , privaterequestData  :: a
-  }
+data PrivateRequest a =
+  PrivateRequest
+    { privaterequestNonce :: Int
+    , privaterequestOTP :: Maybe ByteString
+    , privaterequestData :: a
+    }
 
 instance (ToForm a) => ToForm (PrivateRequest a) where
   toForm PrivateRequest{..} =  fromList $
@@ -752,25 +820,32 @@ instance (ToForm a) => ToForm (PrivateRequest a) where
 
 -----------------------------------------------------------------------------
 
-newtype RefId = RefId { refId :: Text} deriving (Eq,Generic,Hashable,Show)
-
-instance FromJSON RefId where
-  parseJSON = withText "RefId" $ return . RefId
+newtype RefId =
+  RefId
+    { refId :: Text
+    }
+  deriving newtype (Eq, Hashable, Show, FromJSON, ToJSON, ToJSONKey)
 
 -----------------------------------------------------------------------------
 
-data QueryLedgers = QueryLedgers
-  { queryledgersLedgers :: HashMap RefId LedgerInfo
-  } deriving Show
+data QueryLedgers =
+  QueryLedgers
+    { queryledgersLedgers :: HashMap RefId LedgerInfo
+    }
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance FromJSON QueryLedgers where
-  parseJSON = parseResult >=> parseJSON >=> return . QueryLedgers . H.fromList . map (first RefId) . H.toList
+  parseJSON = parseResult >=> parseJSON >=> pure . QueryLedgers . H.fromList . map (first RefId) . H.toList
 
 -----------------------------------------------------------------------------
 
-data QueryLedgersOptions = QueryLedgersOptions
-  { queryledgersIds :: [Text]
-  } deriving Show
+data QueryLedgersOptions =
+  QueryLedgersOptions
+    { queryledgersIds :: [Text]
+    }
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance Default QueryLedgersOptions where
   def = QueryLedgersOptions []
@@ -781,20 +856,23 @@ instance ToForm QueryLedgersOptions where
 
 -----------------------------------------------------------------------------
 
-data QueryOrders = QueryOrders
-  { unQueryOrders :: HashMap TxnId OrderInfo
-  } deriving Show
+newtype QueryOrders =
+  QueryOrders
+    { unQueryOrders :: HashMap TxnId OrderInfo
+    }
+  deriving stock (Show, Generic)
+  deriving newtype (ToJSON)
 
 instance FromJSON QueryOrders where
   parseJSON = parseResult >=> parseJSON
-    >=> return . QueryOrders . H.fromList . map (first TxnId) . H.toList
+    >=> pure . QueryOrders . H.fromList . map (first TxnId) . H.toList
 
 -----------------------------------------------------------------------------
 
 data QueryOrdersOptions = QueryOrdersOptions
   { queryordersIncludeTrades :: Bool
-  , queryordersUserRef :: Maybe Text
-  , queryordersTxnIds :: [Text]
+  , queryordersUserRef       :: Maybe Text
+  , queryordersTxnIds        :: [Text]
   } deriving Show
 
 instance Default QueryOrdersOptions where
@@ -810,19 +888,24 @@ instance ToForm QueryOrdersOptions where
 
 -----------------------------------------------------------------------------
 
-data QueryTrades = QueryTrades
-  { querytradesTrades :: HashMap TxnId TradeHistoryInfo
-  } deriving Show
+newtype QueryTrades =
+  QueryTrades
+    { querytradesTrades :: HashMap TxnId TradeHistoryInfo
+    }
+  deriving newtype (Show, ToJSON)
 
 instance FromJSON QueryTrades where
-  parseJSON = parseResult >=> parseJSON >=> return . QueryTrades . H.fromList . map (first TxnId) . H.toList
+  parseJSON = parseResult >=> parseJSON >=> pure . QueryTrades . H.fromList . map (first TxnId) . H.toList
 
 -----------------------------------------------------------------------------
 
-data QueryTradesOptions = QueryTradesOptions
-  { querytradesTxnIds :: [Text]
-  , querytradesIncludeTrades :: Bool
-  } deriving Show
+data QueryTradesOptions =
+  QueryTradesOptions
+    { querytradesTxnIds :: [Text]
+    , querytradesIncludeTrades :: Bool
+    }
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance Default QueryTradesOptions where
   def = QueryTradesOptions [] False
@@ -835,11 +918,14 @@ instance ToForm QueryTradesOptions where
 
 -----------------------------------------------------------------------------
 
-data SpreadInfo = SpreadInfo
-  { spreadinfoTime :: UTCTime
-  , spreadinfoBid :: Scientific
-  , spreadinfoAsk :: Scientific
-  } deriving Show
+data SpreadInfo =
+  SpreadInfo
+    { spreadinfoTime :: UTCTime
+    , spreadinfoBid :: Scientific
+    , spreadinfoAsk :: Scientific
+    }
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance FromJSON SpreadInfo where
   parseJSON = withArray "SpreadInfo" $ \v -> SpreadInfo
@@ -849,10 +935,13 @@ instance FromJSON SpreadInfo where
 
 -----------------------------------------------------------------------------
 
-data SpreadOptions = SpreadOptions
-  { spreadPair :: AssetPair
-  , spreadSince :: Maybe Text
-  } deriving Show
+data SpreadOptions =
+  SpreadOptions
+    { spreadPair :: AssetPair
+    , spreadSince :: Maybe Text
+    }
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance Default SpreadOptions where
   def = SpreadOptions def Nothing
@@ -865,11 +954,14 @@ instance ToForm SpreadOptions where
 
 -----------------------------------------------------------------------------
 
-data Spreads = Spreads
-  { spreadsPair :: AssetPair
-  , spreadsLast :: UTCTime
-  , spreadsSpreads :: [SpreadInfo]
-  } deriving Show
+data Spreads =
+  Spreads
+    { spreadsPair :: AssetPair
+    , spreadsLast :: UTCTime
+    , spreadsSpreads :: [SpreadInfo]
+    }
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance FromJSON Spreads where
   parseJSON = parseResult >=> withObject "Spreads" (\o -> do
@@ -877,29 +969,32 @@ instance FromJSON Spreads where
     let l = (posixSecondsToUTCTime . fromInteger) lt
     let (p,ssj) = (head . H.toList . H.delete "last") o
     ss <- parseJSON ssj
-    return $ Spreads (read $ T.unpack p) l ss)
+    pure $ Spreads (read $ T.unpack p) l ss)
 
 -----------------------------------------------------------------------------
 
-data TickerInfo = TickerInfo
-  { tickerAskPrice :: Scientific
-  , tickerAskVol :: Scientific
-  , tickerBidPrice :: Scientific
-  , tickerBidVol :: Scientific
-  , tickerLastTradePrice :: Scientific
-  , tickerLastTradeVol :: Scientific
-  , tickerVolToday :: Scientific
-  , tickerVol24Hours :: Scientific
-  , tickerVWAPToday :: Scientific
-  , tickerVWAP24Hours :: Scientific
-  , tickerNumTradesToday :: Int
-  , tickerNumTrades24Hours :: Int
-  , tickerLowToday :: Scientific
-  , tickerLow24Hours :: Scientific
-  , tickerHighToday :: Scientific
-  , tickerHigh24Hours :: Scientific
-  , tickerOpen :: Scientific
-  } deriving Show
+data TickerInfo =
+  TickerInfo
+    { tickerAskPrice :: Scientific
+    , tickerAskVol :: Scientific
+    , tickerBidPrice :: Scientific
+    , tickerBidVol :: Scientific
+    , tickerLastTradePrice :: Scientific
+    , tickerLastTradeVol :: Scientific
+    , tickerVolToday :: Scientific
+    , tickerVol24Hours :: Scientific
+    , tickerVWAPToday :: Scientific
+    , tickerVWAP24Hours :: Scientific
+    , tickerNumTradesToday :: Int
+    , tickerNumTrades24Hours :: Int
+    , tickerLowToday :: Scientific
+    , tickerLow24Hours :: Scientific
+    , tickerHighToday :: Scientific
+    , tickerHigh24Hours :: Scientific
+    , tickerOpen :: Scientific
+    }
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance FromJSON TickerInfo where
   parseJSON = withObject "ticker info" $ \o -> do
@@ -912,13 +1007,15 @@ instance FromJSON TickerInfo where
     [tickerLowToday,tickerLow24Hours] <- (map read) <$> o .: "l"
     [tickerHighToday,tickerHigh24Hours] <- (map read) <$> o .: "h"
     tickerOpen <- read <$> o .: "o"
-    return TickerInfo{..}
+    pure TickerInfo{..}
 
 -----------------------------------------------------------------------------
 
-data TickerOptions = TickerOptions
-  { tickerPairs :: [AssetPair]
-  } deriving Show
+newtype TickerOptions =
+  TickerOptions
+    { tickerPairs :: [AssetPair]
+    }
+  deriving newtype (Show, ToJSON)
 
 instance Default TickerOptions where
   def = TickerOptions []
@@ -930,31 +1027,38 @@ instance ToForm TickerOptions where
 
 -----------------------------------------------------------------------------
 
-data Ticker = Ticker
-  { unTicker :: HashMap AssetPair TickerInfo
-  } deriving Show
+newtype Ticker =
+  Ticker
+    { unTicker :: HashMap AssetPair TickerInfo
+    }
+  deriving newtype (Show, ToJSON)
 
 instance FromJSON Ticker where
   parseJSON = parseResult
     >=> parseJSON
-    >=> return . Ticker . H.fromList . map (first read) . H.toList
+    >=> pure . Ticker . H.fromList . map (first read) . H.toList
 
 -----------------------------------------------------------------------------
 
-newtype Time = Time { unTime :: UTCTime } deriving Show
+newtype Time =
+  Time
+    { unTime :: UTCTime
+    }
+  deriving newtype (Show, ToJSON)
 
 instance FromJSON Time where
   parseJSON x = do
     r <- parseResult x
     (t :: Int) <- r .: "unixtime"
-    return . Time . posixSecondsToUTCTime . fromIntegral $ t
+    pure . Time . posixSecondsToUTCTime . fromIntegral $ t
 
 -----------------------------------------------------------------------------
 
-data TimeBound =
-    TimeBound'DateTime UTCTime
+data TimeBound
+  = TimeBound'DateTime UTCTime
   | TimeBound'TxnId Text
-    deriving Show
+  deriving stock (Show, Generic)
+  deriving anyclass (FromJSON, ToJSON)
 
 instance ToHttpApiData TimeBound where
   toUrlPiece (TimeBound'DateTime ut) = T.pack . show . utcTimeToPOSIXSeconds $ ut
@@ -962,27 +1066,34 @@ instance ToHttpApiData TimeBound where
 
 -----------------------------------------------------------------------------
 
-newtype Timestamp = Timestamp { timestamp :: UTCTime } deriving (Show)
+newtype Timestamp =
+  Timestamp
+    { timestamp :: UTCTime
+    }
+  deriving newtype (Show, ToJSON)
 
 instance FromJSON Timestamp where
-  parseJSON = withScientific "Timestamp" $ return . Timestamp . posixSecondsToUTCTime . fromRational . toRational
+  parseJSON = withScientific "Timestamp" $ pure . Timestamp . posixSecondsToUTCTime . fromRational . toRational
 
 maybeTimestamp :: Timestamp -> Maybe Timestamp
 maybeTimestamp ts@(Timestamp t) = if (t == posixSecondsToUTCTime 0) then Nothing else (Just ts)
 
 -----------------------------------------------------------------------------
 
-data TradeBalance = TradeBalance
-  { tradebalanceEquivBalance :: Scientific
-  , tradebalanceTradeBalance :: Scientific
-  , tradebalanceMarginOpen :: Scientific
-  , tradebalanceUnrealizedNetPLOpen :: Scientific
-  , tradebalanceCostBasisOpen :: Scientific
-  , tradebalanceFloatingValOpen :: Scientific
-  , tradebalanceEquity :: Scientific
-  , tradebalanceFreeMargin :: Scientific
-  , tradebalanceMarginLevel :: Maybe Scientific
-  } deriving Show
+data TradeBalance =
+  TradeBalance
+    { tradebalanceEquivBalance :: Scientific
+    , tradebalanceTradeBalance :: Scientific
+    , tradebalanceMarginOpen :: Scientific
+    , tradebalanceUnrealizedNetPLOpen :: Scientific
+    , tradebalanceCostBasisOpen :: Scientific
+    , tradebalanceFloatingValOpen :: Scientific
+    , tradebalanceEquity :: Scientific
+    , tradebalanceFreeMargin :: Scientific
+    , tradebalanceMarginLevel :: Maybe Scientific
+    }
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance FromJSON TradeBalance where
   parseJSON = parseResult >=> withObject "TradeBalance" (\o -> do
@@ -995,14 +1106,17 @@ instance FromJSON TradeBalance where
     tradebalanceEquity <- read <$> o .: "e"
     tradebalanceFreeMargin <- read <$> o .: "mf"
     tradebalanceMarginLevel <- (fmap read) <$> o .:? "ml"
-    return TradeBalance{..})
+    pure TradeBalance{..})
 
 -----------------------------------------------------------------------------
 
-data TradeBalanceOptions = TradeBalanceOptions
-  { tradebalanceAssetClass :: Maybe AssetClass
-  , tradebalanceAsset :: Asset
-  } deriving Show
+data TradeBalanceOptions =
+  TradeBalanceOptions
+    { tradebalanceAssetClass :: Maybe AssetClass
+    , tradebalanceAsset :: Asset
+    }
+  deriving stock (Show, Generic)
+  deriving anyclass (FromJSON, ToJSON)
 
 instance Default TradeBalanceOptions where
   def = TradeBalanceOptions (Just Currency) ZUSD
@@ -1015,21 +1129,24 @@ instance ToForm TradeBalanceOptions where
 
 -----------------------------------------------------------------------------
 
-data TradeHistoryInfo = TradeHistoryInfo
-  { tradehistoryinfoTxnId :: TxnId
-  , tradehistoryinfoPair :: AssetPair
-  , tradehistoryinfoTime :: Timestamp
-  , tradehistoryinfoDir :: OrderDir
-  , tradehistoryinfoType :: OrderType
-  , tradehistoryinfoPrice :: Price
-  , tradehistoryinfoCost :: Amount
-  , tradehistoryinfoFee :: Amount
-  , tradehistoryinfoVol :: Volume
-  , tradehistoryinfoInitialMargin :: Amount
-  , tradehistoryinfoMisc :: Text -- TBC
-  , tradehistoryinfoClosing :: Maybe Value -- TBC
-  , tradehistoryinfoPosition :: Maybe PositionInfo
-  } deriving Show
+data TradeHistoryInfo =
+  TradeHistoryInfo
+    { tradehistoryinfoTxnId :: TxnId
+    , tradehistoryinfoPair :: AssetPair
+    , tradehistoryinfoTime :: Timestamp
+    , tradehistoryinfoDir :: OrderDir
+    , tradehistoryinfoType :: OrderType
+    , tradehistoryinfoPrice :: Price
+    , tradehistoryinfoCost :: Amount
+    , tradehistoryinfoFee :: Amount
+    , tradehistoryinfoVol :: Volume
+    , tradehistoryinfoInitialMargin :: Amount
+    , tradehistoryinfoMisc :: Text -- TBC
+    , tradehistoryinfoClosing :: Maybe Value -- TBC
+    , tradehistoryinfoPosition :: Maybe PositionInfo
+    }
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance FromJSON TradeHistoryInfo where
   parseJSON v = v & withObject "TradeHistoryInfo" (\o -> TradeHistoryInfo
@@ -1046,19 +1163,22 @@ instance FromJSON TradeHistoryInfo where
     <*> o .:  "misc"
     <*> o .:? "closing"
     <*> (o .:? "posstatus" >>= \case
-          Nothing                    -> return Nothing
+          Nothing                    -> pure Nothing
           Just (_ :: PositionStatus) -> fmap Just (parseJSON v)))
 
 -----------------------------------------------------------------------------
 
-data TradeInfo = TradeInfo
-  { tradeinfoPrice :: Scientific
-  , tradeinfoVol :: Scientific
-  , tradeinfoTime :: UTCTime
-  , tradeinfoDir :: OrderDir
-  , tradeinfoType :: OrderType
-  , tradeinfoMisc :: Text
-  } deriving Show
+data TradeInfo =
+  TradeInfo
+    { tradeinfoPrice :: Scientific
+    , tradeinfoVol :: Scientific
+    , tradeinfoTime :: UTCTime
+    , tradeinfoDir :: OrderDir
+    , tradeinfoType :: OrderType
+    , tradeinfoMisc :: Text
+    }
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance FromJSON TradeInfo where
   parseJSON = withArray "TradeInfo" $ \v -> TradeInfo
@@ -1071,11 +1191,14 @@ instance FromJSON TradeInfo where
 
 -----------------------------------------------------------------------------
 
-data Trades = Trades
-  { tradesPair :: AssetPair
-  , tradesLast :: UTCTime
-  , tradesTrades :: [TradeInfo]
-  } deriving Show
+data Trades =
+  Trades
+    { tradesPair :: AssetPair
+    , tradesLast :: UTCTime
+    , tradesTrades :: [TradeInfo]
+    }
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance FromJSON Trades where
   parseJSON = parseResult >=> withObject "Trades" (\o -> do
@@ -1083,30 +1206,36 @@ instance FromJSON Trades where
     let l = (posixSecondsToUTCTime . fromRational . (% 1000000000) . fromInteger . read) lt
     let (p,tsj) = (head . H.toList . H.delete "last") o
     ts <- parseJSON tsj
-    return $ Trades (read $ T.unpack p) l ts)
+    pure $ Trades (read $ T.unpack p) l ts)
 
 -----------------------------------------------------------------------------
 
-data TradesHistory = TradesHistory
-  { tradeshistoryTrades :: HashMap TxnId TradeHistoryInfo
-  , tradeshistoryCount :: Int
-  } deriving Show
+data TradesHistory =
+  TradesHistory
+    { tradeshistoryTrades :: HashMap TxnId TradeHistoryInfo
+    , tradeshistoryCount :: Int
+    }
+  deriving  (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance FromJSON TradesHistory where
   parseJSON = parseResult >=> withObject "TradesHistory" (\o -> do
-    tradeshistoryTrades <- o .: "trades" >>= parseJSON >>= return . H.fromList . map (first TxnId) . H.toList
-    tradeshistoryCount   <- o .: "count"      
-    return TradesHistory{..})
+    tradeshistoryTrades <- o .: "trades" >>= parseJSON >>= pure . H.fromList . map (first TxnId) . H.toList
+    tradeshistoryCount   <- o .: "count"
+    pure TradesHistory{..})
 
 -----------------------------------------------------------------------------
 
-data TradesHistoryOptions = TradesHistoryOptions
-  { tradeshistoryoptionsType :: Maybe TradeType
-  , tradeshistoryoptionsIncludeTrades :: Bool
-  , tradeshistoryoptionsStart :: Maybe TimeBound
-  , tradeshistoryoptionsEnd  :: Maybe TimeBound
-  , tradeshistoryoptionsOffset  :: Maybe Int
-  } deriving Show
+data TradesHistoryOptions =
+  TradesHistoryOptions
+    { tradeshistoryoptionsType :: Maybe TradeType
+    , tradeshistoryoptionsIncludeTrades :: Bool
+    , tradeshistoryoptionsStart :: Maybe TimeBound
+    , tradeshistoryoptionsEnd :: Maybe TimeBound
+    , tradeshistoryoptionsOffset :: Maybe Int
+    }
+  deriving stock (Show, Generic)
+  deriving anyclass (FromJSON, ToJSON)
 
 instance Default TradesHistoryOptions where
   def = TradesHistoryOptions Nothing False Nothing Nothing Nothing
@@ -1125,10 +1254,13 @@ instance ToForm TradesHistoryOptions where
 
 -----------------------------------------------------------------------------
 
-data TradesOptions = TradesOptions
-  { tradesoptionsPair :: AssetPair
-  , tradesoptionsSince :: Maybe Text
-  } deriving Show
+data TradesOptions =
+  TradesOptions
+    { tradesoptionsPair :: AssetPair
+    , tradesoptionsSince :: Maybe Text
+    }
+  deriving stock (Show, Generic)
+  deriving anyclass (FromJSON, ToJSON)
 
 instance Default TradesOptions where
   def = TradesOptions def Nothing
@@ -1141,19 +1273,20 @@ instance ToForm TradesOptions where
 
 -----------------------------------------------------------------------------
 
-data TradeType =
-    AllTradeTypes
+data TradeType
+  = AllTradeTypes
   | AnyPosition
   | ClosedPosition
   | ClosingPosition
   | NoPosition
-    deriving (Enum,Eq,Ord,Show)
+  deriving stock (Enum, Eq, Ord, Show, Generic)
+  deriving anyclass (FromJSON, ToJSON)
 
 instance Default TradeType where
   def = AllTradeTypes
 
 instance ToHttpApiData TradeType where
-  toUrlPiece = \case 
+  toUrlPiece = \case
     AllTradeTypes   -> "all"
     AnyPosition     -> "any position"
     ClosedPosition  -> "closed position"
@@ -1162,39 +1295,40 @@ instance ToHttpApiData TradeType where
 
 -----------------------------------------------------------------------------
 
-data TradeVolumeOptions = TradeVolumeOptions
-  { tradevolumeFeePairs :: [AssetPair]
-  } deriving Show
+data TradeVolumeOptions =
+  TradeVolumeOptions
+    { tradevolumeFeePairs :: [AssetPair]
+    }
+  deriving (Show)
 
 instance Default TradeVolumeOptions where
   def = TradeVolumeOptions []
 
 instance ToForm TradeVolumeOptions where
   toForm TradeVolumeOptions{..} = fromList $
-    case tradevolumeFeePairs of 
+    case tradevolumeFeePairs of
       [] -> []
       _  -> [ ("pair",(T.intercalate "," . map toUrlPiece) tradevolumeFeePairs)
             , ("fee-info","true")
             ]
 
------------------------------------------------------------------------------
+newtype TxnId =
+  TxnId
+    { txnId :: Text
+    }
+  deriving newtype (Eq, Hashable, Show, FromJSON, ToJSON, ToJSONKey)
 
-newtype TxnId = TxnId { txnId :: Text} deriving (Eq,Generic,Hashable,Show)
+newtype UserRef =
+  UserRef
+    { userRef :: Text
+    }
+  deriving newtype (FromJSON, ToJSON, Hashable, Show)
 
-instance FromJSON TxnId where
-  parseJSON = withText "TxnId" $ return . TxnId
-
------------------------------------------------------------------------------
-
-newtype UserRef = UserRef { userRef :: Text} deriving (FromJSON,Generic,Hashable,Show)
-
------------------------------------------------------------------------------
-
-newtype Volume = Volume { volume :: Scientific } deriving (Show)
-
-instance FromJSON Volume where parseJSON = fmap Volume . parseScientific
-
------------------------------------------------------------------------------
+newtype Volume =
+  Volume
+    { volume :: Scientific
+    }
+  deriving newtype (FromJSON, ToJSON, Hashable, Show)
 
 instance ToForm () where
   toForm () = fromList []
